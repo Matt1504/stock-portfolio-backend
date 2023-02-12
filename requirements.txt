@@ -1,7 +1,11 @@
+###### Requirements without Version Specifiers ######
 pandas
 python-dateutil
 mongoengine
-graphene
-graphene_mongo
 flask
 flask_graphql
+
+###### Requirements with Version Specifiers ######
+graphql-core == 2.2.1
+graphe == 2.1.8
+graphene_mongo == 0.2.0

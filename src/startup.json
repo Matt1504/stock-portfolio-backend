@@ -156,6 +156,9 @@
         "name": "Buy"
        },
        {
+        "name": "Sell"
+       },
+       {
         "name": "Dividends"
        },
        {
