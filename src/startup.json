@@ -1,0 +1,171 @@
+{
+    "currencies": [
+        {
+            "name": "Canadian Dollar",
+            "code": "CAD"
+        },
+        {
+            "name": "United States Dollar",
+            "code": "USD"
+        }
+    ],
+    "accounts": [
+        {
+            "name": "Tax-Free Savings Account",
+            "code": "TFSA"
+        },
+        {
+            "name": "Registered Retirement Savings Plan",
+            "code": "RRSP"
+        }
+    ],
+    "platforms": [
+        {
+            "name": "TD Direct Investing",
+            "account": {
+                "name": "Tax-Free Savings Account",
+                "code": "TFSA"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "TD Direct Investing",
+            "account": {
+                "name": "Tax-Free Savings Account",
+                "code": "TFSA"
+            },
+            "currency": {
+                "name": "United States Dollar",
+                "code": "USD"
+            }
+        },
+        {
+            "name": "TD Direct Investing",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "TD Direct Investing",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "United States Dollar",
+                "code": "USD"
+            }
+        },
+        {
+            "name": "TD Easy Trade",
+            "account": {
+                "name": "Tax-Free Savings Account",
+                "code": "TFSA"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "TD Easy Trade",
+            "account": {
+                "name": "Tax-Free Savings Account",
+                "code": "TFSA"
+            },
+            "currency": {
+                "name": "United States Dollar",
+                "code": "USD"
+            }
+        },
+        {
+            "name": "TD Easy Trade",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "TD Easy Trade",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "United States Dollar",
+                "code": "USD"
+            }
+        },
+        {
+            "name": "Wealthsimple",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "Wealthsimple",
+            "account": {
+                "name": "Tax-Free Savings Account",
+                "code": "TFSA"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        },
+        {
+            "name": "CanadaLife",
+            "account": {
+                "name": "Registered Retirement Savings Plan",
+                "code": "RRSP"
+            },
+            "currency": {
+                "name": "Canadian Dollar",
+                "code": "CAD"
+            }
+        }
+    ],
+    "activities": [
+       {
+        "name": "Contribution"
+       },
+       {
+        "name": "Transfer In"
+       },
+       {
+        "name": "Transfer Out"
+       },
+       {
+        "name": "Buy"
+       },
+       {
+        "name": "Dividends"
+       },
+       {
+        "name": "Withholding Tax"
+       },
+       {
+        "name": "Adjustment"
+       },
+       {
+        "name": "Stock Split"
+       }
+    ]
+}

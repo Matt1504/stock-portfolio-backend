@@ -1,0 +1,7 @@
+pandas
+python-dateutil
+mongoengine
+graphene
+graphene_mongo
+flask
+flask_graphql
