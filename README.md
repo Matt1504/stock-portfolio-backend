@@ -72,16 +72,16 @@ This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5
 
 ```json
 # this is our query
-{
-    allActivities {
-    edges {
-      node {
-        id
-        name
-      }
-    }
-  }
-}
+# {
+#    activities {
+#    edges {
+#      node {
+#        id
+#        name
+#      }
+#    }
+#  }
+# }
 # this is our response 
 {
   "data": {
@@ -145,4 +145,4 @@ This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5
     }
   }
 }
-``
+```
