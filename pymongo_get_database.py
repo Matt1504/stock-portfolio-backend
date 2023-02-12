@@ -1,5 +1,5 @@
 from pymongo import MongoClient
-import passwords
+import src.passwords as passwords
 
 def get_database():
  
