@@ -7,4 +7,4 @@ class Accounts(MongoengineObjectType):
     class Meta:
         description = "Accounts"
         model = AccountsModel
-        interfaces = (Node,)
+        interfaces = (Node,) 

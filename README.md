@@ -3,7 +3,7 @@
 ## Overview
 This project is the code that runs the backend server for our front end Stock Portfolio application. It connects to a MongoDB database that stores our data. API requests are using GraphQL and handled with Graphene-Python. The web server application is hosted using Flask. 
 
-## Pre-Requisites
+## Getting started
 Set up Mongo DB [account](https://www.mongodb.com/cloud/atlas/register)
 
 Set up your cluster

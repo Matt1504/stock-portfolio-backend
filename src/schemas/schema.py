@@ -1,6 +1,7 @@
 import graphene 
 from graphene.relay import Node
 from graphene_mongo import MongoengineConnectionField
+from graphene import ObjectType
 
 from schemas.accounts import Accounts
 from schemas.activities import Activities
@@ -9,15 +10,18 @@ from schemas.platforms import Platforms
 from schemas.stocks import Stocks
 from schemas.transactions import Transactions
 
-class Query(graphene.ObjectType):
+class Query(ObjectType):
     node = Node.Field
 
-    all_accounts = MongoengineConnectionField(Accounts)
-    all_activities = MongoengineConnectionField(Activities)
-    all_currencies = MongoengineConnectionField(Currencies)
-    all_platforms = MongoengineConnectionField(Platforms)
-    all_stocks = MongoengineConnectionField(Stocks)
-    all_transactions = MongoengineConnectionField(Transactions)
+    accounts = MongoengineConnectionField(Accounts)
+    activities = MongoengineConnectionField(Activities)
+    currencies = MongoengineConnectionField(Currencies)
+    platforms = MongoengineConnectionField(Platforms)
+    stocks = MongoengineConnectionField(Stocks)
+    transactions = MongoengineConnectionField(Transactions)
+
+    
+    
 
 
 schema = graphene.Schema(query = Query, types=[Accounts, Activities, Currencies, Platforms, Stocks, Transactions])
