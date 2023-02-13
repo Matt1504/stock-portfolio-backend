@@ -70,19 +70,21 @@ python3 app.py
 ```
 This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5000/) but since we are using GraphQL, our application is actually using [http://127.0.0.1:5000/graphql](http://127.0.0.1:5000/graphql). We use GraphiQL for our playground. Here we can test our GraphQL APIs and explore the documentation. For example, if we wanted to get all the activities, we can run the following in our GraphiQL playground
 
+```
+{
+  activities {
+    edges {
+      node {
+        id
+        name
+      }
+    }
+  }
+}
+```
+
+to produce the response 
 ```json
-# this is our query
-# {
-#    activities {
-#    edges {
-#      node {
-#        id
-#        name
-#      }
-#    }
-#  }
-# }
-# this is our response 
 {
   "data": {
     "allActivities": {
