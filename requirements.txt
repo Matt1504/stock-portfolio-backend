@@ -4,6 +4,7 @@ python-dateutil
 mongoengine
 flask
 flask_graphql
+flask-cors
 
 ###### Requirements with Version Specifiers ######
 graphql-core == 2.2.1
