@@ -1,10 +1,10 @@
 from graphene.relay import Node
 from graphene_mongo import MongoengineObjectType
 
-from models.models import Stocks as StocksModel 
+from models.models import Stock as StockModel 
 
-class Stocks(MongoengineObjectType):
+class StockType(MongoengineObjectType):
     class Meta:
         description = "Stocks"
-        model = StocksModel
+        model = StockModel
         interfaces = (Node,)

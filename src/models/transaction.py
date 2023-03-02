@@ -1,21 +1,20 @@
 from mongoengine import Document
 from  mongoengine.fields import (
     DateTimeField,
-    StringField,
     IntField,
     DecimalField,
 )
-from models.stocks import Stocks
-from models.platforms import Platforms
-from models.activities import Activities
+from models.stock import Stock
+from models.platform import Platform
+from models.activity import Activity
 
-class Transactions(Document):
+class Transaction(Document):
     meta = {"collection": "transactions"}
-    stock = Stocks
-    platform = Platforms
+    stock = Stock
+    platform = Platform
     price = DecimalField()
     shares = IntField()
     fee = DecimalField()
     transaction_date = DateTimeField()
-    activity = StringField
+    activity = Activity
     total = DecimalField()

@@ -1,10 +1,10 @@
 from graphene.relay import Node
 from graphene_mongo import MongoengineObjectType
 
-from models.models import Activities as ActivitiesModel 
+from models.models import Activity as ActivityModel 
 
-class Activities(MongoengineObjectType):
+class ActivityType(MongoengineObjectType):
     class Meta:
         description = "Activities"
-        model = ActivitiesModel
+        model = ActivityModel
         interfaces = (Node,)

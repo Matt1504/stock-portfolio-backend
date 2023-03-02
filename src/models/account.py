@@ -3,7 +3,7 @@ from  mongoengine.fields import (
     StringField,
 )
 
-class Stocks(Document):
-    meta = {"collection": "stocks"}
+class Account(Document):
+    meta = {"collection": "accounts"}
     name = StringField()
-    ticker = StringField()
+    code = StringField()

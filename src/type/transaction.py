@@ -1,10 +1,10 @@
 from graphene.relay import Node
 from graphene_mongo import MongoengineObjectType
 
-from models.models import Transactions as TransactionsModel 
+from models.models import Transaction as TransactionModel 
 
-class Transactions(MongoengineObjectType):
+class TransactionType(MongoengineObjectType):
     class Meta:
         description = "Transactions"
-        model = TransactionsModel
+        model = TransactionModel
         interfaces = (Node,)

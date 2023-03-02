@@ -3,6 +3,6 @@ from  mongoengine.fields import (
     StringField,
 )
 
-class Activities(Document):
+class Activity(Document):
     meta = {"collection": "activities"}
     name = StringField()

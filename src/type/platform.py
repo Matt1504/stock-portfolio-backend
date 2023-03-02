@@ -1,10 +1,10 @@
 from graphene.relay import Node
 from graphene_mongo import MongoengineObjectType
 
-from models.models import Platforms as PlatformsModel 
+from models.models import Platform as PlatformModel 
 
-class Platforms(MongoengineObjectType):
+class PlatformType(MongoengineObjectType):
     class Meta:
         description = "Platforms"
-        model = PlatformsModel
+        model = PlatformModel
         interfaces = (Node,)
