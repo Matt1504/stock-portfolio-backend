@@ -10,6 +10,7 @@ from models.stock import Stock
 from type.stock import StockType 
 
 class StockInput(InputObjectType):
+    id = ID()
     name = String()
     ticker = String()
 
@@ -33,15 +34,11 @@ class CreateStockMutation(Mutation):
 class UpdateStockMutation(Mutation):
     stock = Field(StockType)
 
-    class Arugments:
+    class Arguments:
         stock_data = StockInput(required=True)
 
-    @staticmethod
-    def get_object(id):
-        return Stock.objects.get(pk=id)
-
     def mutate(self, info, stock_data=None):
-        stock = UpdateStockMutation.get_object(stock_data.id)
+        stock = Stock.objects.get(pk=stock_data.id)
         if (stock_data.name):
             stock.name = stock_data.name
         if (stock_data.ticker):
@@ -52,7 +49,7 @@ class UpdateStockMutation(Mutation):
         return UpdateStockMutation(stock=stock)
 
 class DeleteStockMutation(Mutation):
-    class Arugments:
+    class Arguments:
         id = ID(required=True)
         
     success = Boolean()

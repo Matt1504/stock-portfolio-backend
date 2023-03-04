@@ -16,10 +16,19 @@ from schemas.mutations.stock import (
     DeleteStockMutation
 )
 
+from schemas.mutations.transaction import (
+    CreateTransactionMutation,
+    UpdateTransactionMutation,
+    DeleteTransactionMutation
+)
+
 class Mutations(ObjectType):
     create_stock = CreateStockMutation.Field()
     update_stock = UpdateStockMutation.Field()
     delete_stock = DeleteStockMutation.Field()
+    create_transaction = CreateTransactionMutation.Field()
+    update_transaction = UpdateTransactionMutation.Field()
+    delete_transaction = DeleteTransactionMutation.Field()
 
 class Query(ObjectType):
     node = Node.Field
