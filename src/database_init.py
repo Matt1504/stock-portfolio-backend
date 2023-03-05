@@ -1,15 +1,18 @@
 import json
 
 from database.database import client, DATABASE
-from models import models
+from models.models import (
+    Activity,
+    Account,
+    Platform,
+    Currency
+)
 
 client.drop_database(DATABASE)
 
 def init_db():
     with open("startup.json") as f:
         data = json.load(f)
-
-    print(data)
     
     cad = None
     usd = None 
@@ -18,7 +21,7 @@ def init_db():
     rrsp = None 
 
     for elem in data["currencies"]:
-        currency = models.Currencies(name=elem["name"], code=elem["code"])
+        currency = Currency(name=elem["name"], code=elem["code"])
         currency.save()
         if currency.code == "CAD":
             cad = currency
@@ -26,7 +29,7 @@ def init_db():
             usd = currency
     
     for elem in data["accounts"]:
-        account = models.Accounts(name=elem["name"], code=elem["code"])
+        account = Account(name=elem["name"], code=elem["code"])
         account.save()
         if account.code == "TFSA":
             tfsa = account
@@ -34,19 +37,19 @@ def init_db():
             rrsp = account
     
     for elem in data["activities"]:
-        activity = models.Activities(name=elem["name"])
+        activity = Activity(name=elem["name"])
         activity.save()
     
     for elem in data["platforms"]:
-        curr = cad
+        curr = cad.to_dbref()
         if elem["currency"]["code"] == "USD":
-            curr = usd
+            curr = usd.to_dbref()
 
-        acc = tfsa
+        acc = tfsa.to_dbref()
         if elem["account"]["code"] == "RRSP":
-            acc = rrsp
+            acc = rrsp.to_dbref()
         
-        platform = models.Platforms(name=elem["name"], account=acc, currency=curr)
+        platform = Platform(name=elem["name"], account=acc, currency=curr)
         platform.save()
 
 init_db()

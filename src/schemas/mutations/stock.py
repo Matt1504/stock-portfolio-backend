@@ -4,15 +4,19 @@ from graphene import (
     Mutation, 
     Field, 
     String,
-    Boolean
+    Boolean,
 )
-from models.stock import Stock
+from models.models import (
+    Stock,
+    Currency
+)
 from type.stock import StockType 
 
 class StockInput(InputObjectType):
-    id = ID()
+    id = String()
     name = String()
     ticker = String()
+    currency = String()
 
 class CreateStockMutation(Mutation):
     stock = Field(StockType)
@@ -26,6 +30,7 @@ class CreateStockMutation(Mutation):
         stock = Stock(
             name=stock_data.name,
             ticker=stock_data.ticker,
+            currency=stock_data.currency
         ) 
         stock.save()
 
@@ -43,6 +48,8 @@ class UpdateStockMutation(Mutation):
             stock.name = stock_data.name
         if (stock_data.ticker):
             stock.ticker = stock_data.ticker
+        if (stock_data.currency):
+            stock.currency = stock_data.currency
 
         stock.save()
     

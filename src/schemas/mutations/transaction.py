@@ -8,10 +8,12 @@ from graphene import (
     Boolean,
     Date
 )
-from models.stock import Stock
-from models.activity import Activity
-from models.platform import Platform
-from models.transaction import Transaction
+from models.models import (
+    Stock, 
+    Activity, 
+    Platform,
+    Transaction
+)
 from type.transaction import TransactionType 
 
 class TransactionInput(InputObjectType):

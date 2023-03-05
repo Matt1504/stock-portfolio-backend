@@ -1,4 +1,4 @@
-from graphene.relay import Node
+from type.custom_node import CustomNode as Node
 from graphene_mongo import MongoengineObjectType
 
 from models.models import Stock as StockModel 
