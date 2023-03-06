@@ -1,7 +1,8 @@
 from graphene import (
     InputObjectType, 
     ID, 
-    Mutation, 
+    Mutation,
+    String, 
     Field, 
     Int,
     Decimal,
@@ -18,13 +19,14 @@ from type.transaction import TransactionType
 
 class TransactionInput(InputObjectType):
     id = ID()
-    stock = Stock()
-    platform = Platform()
+    stock = ID()
+    platform = ID()
     price = Decimal()
     shares = Int()
+    description = String()
     fee = Decimal()
     transaction_date = Date()
-    activity = Activity()
+    activity = ID()
     total = Decimal()
 
 
@@ -40,6 +42,7 @@ class CreateTransactionMutation(Mutation):
             platform = trans_data.platform,
             price = trans_data.price,
             shares = trans_data.shares,
+            description = trans_data.description,
             fee = trans_data.FileExistsError,
             transaction_data = trans_data.transaction_data,
             activity = trans_data.activity,
@@ -63,6 +66,8 @@ class UpdateTransactionMutation(Mutation):
             trans.platform = trans_data.platform
         if (trans_data.price):
             trans.price = trans_data.price
+        if (trans_data.description):
+            trans.description = trans_data.description
         if (trans_data.shares):
             trans.shares = trans_data.shares
         if (trans_data.fee):

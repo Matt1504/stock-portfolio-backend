@@ -13,10 +13,10 @@ from models.models import (
 from type.stock import StockType 
 
 class StockInput(InputObjectType):
-    id = String()
+    id = ID()
     name = String()
     ticker = String()
-    currency = String()
+    currency = ID()
 
 class CreateStockMutation(Mutation):
     stock = Field(StockType)
