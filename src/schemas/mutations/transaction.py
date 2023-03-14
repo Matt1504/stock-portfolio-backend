@@ -10,15 +10,13 @@ from graphene import (
     Date
 )
 from models.models import (
-    Stock, 
-    Activity, 
-    Platform,
     Transaction
 )
 from type.transaction import TransactionType 
 
 class TransactionInput(InputObjectType):
     id = ID()
+    account = ID()
     stock = ID()
     platform = ID()
     price = Decimal()
@@ -31,29 +29,30 @@ class TransactionInput(InputObjectType):
 
 
 class CreateTransactionMutation(Mutation):
-    trans = Field(TransactionType)
+    transaction = Field(TransactionType)
 
     class Arguments:
         trans_data = TransactionInput(required=True)
 
     def mutate(self, info, trans_data=None):
-        trans = Transaction(
+        transaction = Transaction(
             stock = trans_data.stock,
+            account = trans_data.account,
             platform = trans_data.platform,
             price = trans_data.price,
             shares = trans_data.shares,
             description = trans_data.description,
-            fee = trans_data.FileExistsError,
-            transaction_data = trans_data.transaction_data,
+            fee = trans_data.fee,
+            transaction_date = trans_data.transaction_date,
             activity = trans_data.activity,
             total = trans_data.total
         ) 
-        trans.save()
+        transaction.save()
 
-        return CreateTransactionMutation(transaction=trans)
+        return CreateTransactionMutation(transaction=transaction)
 
 class UpdateTransactionMutation(Mutation):
-    stock = Field(TransactionType)
+    trans = Field(TransactionType)
 
     class Arguments:
         trans_data = TransactionInput(required=True)
@@ -62,6 +61,8 @@ class UpdateTransactionMutation(Mutation):
         trans = Transaction.objects.get(pk=trans_data.id)
         if (trans_data.stock):
             trans.stock = trans_data.stock
+        if (trans_data.account):
+            trans.account = trans_data.account
         if (trans_data.platform):
             trans.platform = trans_data.platform
         if (trans_data.price):

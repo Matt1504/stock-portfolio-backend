@@ -1,6 +1,6 @@
 from mongoengine import Document
 from  mongoengine.fields import (
-    DateTimeField,
+    DateField,
     IntField,
     DecimalField,
     StringField,
@@ -10,6 +10,7 @@ from  mongoengine.fields import (
 from models.stock import Stock
 from models.platform import Platform
 from models.activity import Activity
+from models.account import Account
 
 class Transaction(Document):
     meta = {"collection": "transactions"}
@@ -20,6 +21,7 @@ class Transaction(Document):
     shares = IntField()
     description = StringField()
     fee = DecimalField()
-    transaction_date = DateTimeField()
+    transaction_date = DateField()
     activity = ReferenceField(Activity)
+    account = ReferenceField(Account)
     total = DecimalField()
