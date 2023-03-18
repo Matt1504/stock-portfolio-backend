@@ -45,16 +45,20 @@ class Query(ObjectType):
     transactions = MongoengineConnectionField(TransactionType)
 
     # TODO: Move these to its own file similar to mutation
-    transactions_by_stock = graphene.List(TransactionType, stockId=graphene.ID())
-    def resolve_transactions_by_stock(self, info, stockId):
-        return Transaction.objects.filter(stock=stockId)
+    transactions_by_stock = graphene.List(TransactionType, stock=graphene.ID())
+    def resolve_transactions_by_stock(self, info, stock):
+        return Transaction.objects.filter(stock=stock)
     
     transactions_by_account = graphene.List(TransactionType, accountId=graphene.ID())
-    def resolve_transactions_by_account(self, info, accountId):
-        return Transaction.objects.filter(account=accountId)
+    def resolve_transactions_by_account(self, info, account):
+        return Transaction.objects.filter(account=account)
     
     transactions_by_platform = graphene.List(TransactionType, platformId=graphene.ID())
-    def resolve_transactions_by_platform(self, info, platformId):
-        return Transaction.objects.filter(platform=platformId)
+    def resolve_transactions_by_platform(self, info, platform):
+        return Transaction.objects.filter(platform=platform)
+    
+    transactions_by_activity = graphene.List(TransactionType, activity=graphene.ID())
+    def resolve_transactions_by_platform(self, info, activity):
+        return Transaction.objects.filter(activity=activity)
 
 schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])
