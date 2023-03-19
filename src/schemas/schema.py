@@ -49,16 +49,16 @@ class Query(ObjectType):
     def resolve_transactions_by_stock(self, info, stock):
         return Transaction.objects.filter(stock=stock)
     
-    transactions_by_account = graphene.List(TransactionType, accountId=graphene.ID())
+    transactions_by_account = graphene.List(TransactionType, account=graphene.ID())
     def resolve_transactions_by_account(self, info, account):
         return Transaction.objects.filter(account=account)
     
-    transactions_by_platform = graphene.List(TransactionType, platformId=graphene.ID())
+    transactions_by_platform = graphene.List(TransactionType, platform=graphene.ID())
     def resolve_transactions_by_platform(self, info, platform):
         return Transaction.objects.filter(platform=platform)
     
     transactions_by_activity = graphene.List(TransactionType, activity=graphene.ID())
-    def resolve_transactions_by_platform(self, info, activity):
+    def resolve_transactions_by_activity(self, info, activity):
         return Transaction.objects.filter(activity=activity)
 
 schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])
