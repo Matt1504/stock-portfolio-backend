@@ -8,7 +8,6 @@ from graphene import (
 )
 from models.models import (
     Stock,
-    Currency
 )
 from type.stock import StockType 
 

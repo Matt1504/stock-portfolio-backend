@@ -24,9 +24,16 @@ from schemas.mutations.transaction import (
     DeleteTransactionMutation
 )
 
+from schemas.mutations.platform import (
+    CreatePlatformMutation,
+    DeletePlatformMutation
+)
+
 from models.models import Transaction
 
 class Mutations(ObjectType):
+    create_platform = CreatePlatformMutation.Field()
+    delete_platform = DeletePlatformMutation.Field()
     create_stock = CreateStockMutation.Field()
     update_stock = UpdateStockMutation.Field()
     delete_stock = DeleteStockMutation.Field()
