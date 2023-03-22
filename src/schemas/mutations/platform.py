@@ -41,7 +41,7 @@ class DeletePlatformMutation(Mutation):
 
     success = Boolean()
 
-    def mutat(self, info, id):
+    def mutate(self, info, id):
         try:
             Platform.objects.get(pk=id).delete()
             success = True
