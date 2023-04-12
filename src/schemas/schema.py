@@ -21,12 +21,13 @@ from schemas.mutations.stock import (
 from schemas.mutations.transaction import (
     CreateTransactionMutation,
     UpdateTransactionMutation,
-    DeleteTransactionMutation
+    DeleteTransactionMutation,
+    TransferTransactionMutation
 )
 
 from schemas.mutations.platform import (
     CreatePlatformMutation,
-    DeletePlatformMutation
+    DeletePlatformMutation,
 )
 
 from models.models import Transaction
@@ -40,6 +41,7 @@ class Mutations(ObjectType):
     create_transaction = CreateTransactionMutation.Field()
     update_transaction = UpdateTransactionMutation.Field()
     delete_transaction = DeleteTransactionMutation.Field()
+    transfer_account = TransferTransactionMutation.Field()
 
 class Query(ObjectType):
     node = Node.Field

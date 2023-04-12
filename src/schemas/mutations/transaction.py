@@ -10,7 +10,8 @@ from graphene import (
     Date
 )
 from models.models import (
-    Transaction
+    Transaction,
+    Platform
 )
 from type.transaction import TransactionType 
 
@@ -26,7 +27,6 @@ class TransactionInput(InputObjectType):
     transaction_date = Date()
     activity = ID()
     total = Decimal()
-
 
 class CreateTransactionMutation(Mutation):
     transaction = Field(TransactionType)
@@ -83,6 +83,27 @@ class UpdateTransactionMutation(Mutation):
         trans.save()
     
         return UpdateTransactionMutation(transaction=trans)
+
+class TransferTransactionMutation(Mutation):
+    transFrom = Field(TransactionType)
+    transTo = Field(TransactionType)
+
+    class Arguments:
+        trans_from = ID(required=True)
+        trans_to = ID(required=True)
+
+    success = Boolean()
+    def mutate(self, info, trans_from, trans_to):
+        try:
+            trans = Transaction.objects.filter(platform=trans_from)
+            platform = Platform.objects.get(pk=trans_to)
+            for tran in trans:
+                tran.platform = platform
+                tran.save()
+            success = True
+        except Exception:
+            success = False
+        return TransferTransactionMutation(success=success)
 
 class DeleteTransactionMutation(Mutation):
     class Arguments:
