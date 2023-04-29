@@ -4,3 +4,4 @@ from models.currency import Currency
 from models.platform import Platform
 from models.transaction import Transaction
 from models.stock import Stock
+from models.contribution_limit import ContributionLimit

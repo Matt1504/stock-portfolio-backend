@@ -9,7 +9,8 @@ from type.type import (
     CurrencyType,
     PlatformType,
     StockType,
-    TransactionType
+    TransactionType,
+    ContributionLimitType
 )
 
 from schemas.mutations.stock import (
@@ -30,7 +31,12 @@ from schemas.mutations.platform import (
     DeletePlatformMutation,
 )
 
-from models.models import Transaction
+from schemas.mutations.contribution_limit import (
+    CreateContributionLimitMutation,
+    DeleteContributionLimitMutation
+)
+
+from models.models import Transaction, ContributionLimit
 
 class Mutations(ObjectType):
     create_platform = CreatePlatformMutation.Field()
@@ -42,6 +48,8 @@ class Mutations(ObjectType):
     update_transaction = UpdateTransactionMutation.Field()
     delete_transaction = DeleteTransactionMutation.Field()
     transfer_account = TransferTransactionMutation.Field()
+    create_contribution_limit = CreateContributionLimitMutation.Field()
+    delete_contribution_limit = DeleteContributionLimitMutation.Field()
 
 class Query(ObjectType):
     node = Node.Field
@@ -52,6 +60,7 @@ class Query(ObjectType):
     platforms = MongoengineConnectionField(PlatformType)
     stocks = MongoengineConnectionField(StockType)
     transactions = MongoengineConnectionField(TransactionType)
+    contribution_limits = MongoengineConnectionField(ContributionLimitType)
 
     # TODO: Move these to its own file similar to mutation
     transactions_by_stock = graphene.List(TransactionType, stock=graphene.ID())
@@ -69,5 +78,9 @@ class Query(ObjectType):
     transactions_by_activity = graphene.List(TransactionType, activity=graphene.ID())
     def resolve_transactions_by_activity(self, info, activity):
         return Transaction.objects.filter(activity=activity)
+    
+    contribution_limits_by_account = graphene.List(ContributionLimitType, account=graphene.ID())
+    def resolve_contribution_limits_by_account(self, info, account):
+        return ContributionLimit.objects.filter(account=account)
 
 schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])
