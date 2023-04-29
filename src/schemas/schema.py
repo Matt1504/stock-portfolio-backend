@@ -2,7 +2,6 @@ import graphene
 from graphene.relay import Node
 from graphene_mongo import MongoengineConnectionField
 from graphene import ObjectType
-
 from type.type import (
     AccountType,
     ActivityType,
@@ -12,30 +11,28 @@ from type.type import (
     TransactionType,
     ContributionLimitType
 )
-
 from schemas.mutations.stock import (
     CreateStockMutation,
     UpdateStockMutation,
     DeleteStockMutation
 )
-
 from schemas.mutations.transaction import (
     CreateTransactionMutation,
     UpdateTransactionMutation,
     DeleteTransactionMutation,
     TransferTransactionMutation
 )
-
 from schemas.mutations.platform import (
     CreatePlatformMutation,
     DeletePlatformMutation,
 )
-
 from schemas.mutations.contribution_limit import (
     CreateContributionLimitMutation,
     DeleteContributionLimitMutation
 )
-
+from schemas.mutations.account import (
+    CreateAccountMutation
+)
 from models.models import Transaction, ContributionLimit
 
 class Mutations(ObjectType):
@@ -50,7 +47,7 @@ class Mutations(ObjectType):
     transfer_account = TransferTransactionMutation.Field()
     create_contribution_limit = CreateContributionLimitMutation.Field()
     delete_contribution_limit = DeleteContributionLimitMutation.Field()
-
+    create_account = CreateAccountMutation.Field()
 class Query(ObjectType):
     node = Node.Field
 
