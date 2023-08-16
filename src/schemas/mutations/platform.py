@@ -11,7 +11,7 @@ from models.models import (
 )
 from type.platform import PlatformType
 
-class PlatformInput(InputObjectType):
+class  PlatformInput(InputObjectType):
     id = ID()
     name = String()
     account = ID()
@@ -24,8 +24,6 @@ class CreatePlatformMutation(Mutation):
         platform_data = PlatformInput(required=True)
     
     def mutate(self, info, platform_data=None):
-        if Platform.objects.filter(name=platform_data.name):
-            return
         platform = Platform(
             name=platform_data.name,
             account=platform_data.account,

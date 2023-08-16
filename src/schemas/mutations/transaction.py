@@ -82,7 +82,7 @@ class UpdateTransactionMutation(Mutation):
 
         trans.save()
     
-        return UpdateTransactionMutation(transaction=trans)
+        return UpdateTransactionMutation(trans=trans)
 
 class TransferTransactionMutation(Mutation):
     transFrom = Field(TransactionType)

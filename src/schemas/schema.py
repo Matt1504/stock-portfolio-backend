@@ -1,4 +1,5 @@
 import graphene 
+from datetime import datetime, timedelta
 from graphene.relay import Node
 from graphene_mongo import MongoengineConnectionField
 from graphene import ObjectType
@@ -79,5 +80,11 @@ class Query(ObjectType):
     contribution_limits_by_account = graphene.List(ContributionLimitType, account=graphene.ID())
     def resolve_contribution_limits_by_account(self, info, account):
         return ContributionLimit.objects.filter(account=account)
+    
+    transactions_from_this_week = graphene.List(TransactionType)
+    def resolve_transactions_from_this_week(self, info):
+        today = datetime.today()
+        last_week = today - timedelta(days=7)
+        return Transaction.objects(transaction_date__gte=last_week)
 
 schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])

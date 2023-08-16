@@ -3,7 +3,7 @@ from graphene import (
     ID, 
     Mutation,
     Field, 
-    Date,
+    Int,
     Boolean,
     Decimal
 )
@@ -15,7 +15,7 @@ from type.contribution_limit import ContributionLimitType
 class ContributionLimitInput(InputObjectType):
     id = ID()
     account = ID()
-    date = Date()
+    year = Int()
     amount = Decimal()
 
 class CreateContributionLimitMutation(Mutation):
@@ -26,7 +26,7 @@ class CreateContributionLimitMutation(Mutation):
 
     def mutate(self, info, contr_limit_data=None):
         contribution_limit = ContributionLimit(
-            date = contr_limit_data.date,
+            year = contr_limit_data.year,
             account = contr_limit_data.account,
             amount = contr_limit_data.amount
         ) 
