@@ -1,6 +1,6 @@
 from mongoengine import Document
 from  mongoengine.fields import (
-    IntField,
+    DateField,
     ReferenceField,
     ObjectIdField,
     DecimalField
@@ -10,6 +10,6 @@ from models.account import Account
 class ContributionLimit(Document):
     meta = {"collection": "contributionLimits"}
     ID = ObjectIdField()
-    year = IntField()
+    yearEnd = DateField()
     account = ReferenceField(Account)
     amount = DecimalField()

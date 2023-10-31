@@ -24,4 +24,6 @@ class Transaction(Document):
     transaction_date = DateField()
     activity = ReferenceField(Activity)
     account = ReferenceField(Account)
+    rate = DecimalField()
+    maturity_date = DateField()
     total = DecimalField()

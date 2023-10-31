@@ -26,6 +26,8 @@ class TransactionInput(InputObjectType):
     fee = Decimal()
     transaction_date = Date()
     activity = ID()
+    rate = Decimal()
+    maturity_date = Date()
     total = Decimal()
 
 class CreateTransactionMutation(Mutation):
@@ -45,6 +47,8 @@ class CreateTransactionMutation(Mutation):
             fee = trans_data.fee,
             transaction_date = trans_data.transaction_date,
             activity = trans_data.activity,
+            rate = trans_data.rate,
+            maturity_date = trans_data.maturity_date,
             total = trans_data.total
         ) 
         transaction.save()
@@ -77,6 +81,10 @@ class UpdateTransactionMutation(Mutation):
             trans.transaction_date = trans_data.transaction_date
         if (trans_data.activity):
             trans.activity = trans_data.activity
+        if (trans_data.rate):
+            trans.rate = trans_data.rate
+        if (trans_data.maturity_date):
+            trans.maturity_date = trans_data.maturity_date
         if (trans_data.total):
             trans.total = trans_data.total
 
