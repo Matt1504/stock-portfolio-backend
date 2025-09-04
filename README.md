@@ -68,7 +68,9 @@ Once you are fully setup you can start your local web server
 ```bash
 python3 app.py
 ```
-This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5000/) but since we are using GraphQL, our application is actually using [http://127.0.0.1:5000/graphql](http://127.0.0.1:5000/graphql). We use GraphiQL for our playground. Here we can test our GraphQL APIs and explore the documentation. For example, if we wanted to get all the activities, we can run the following in our GraphiQL playground
+This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5000/) but since we are using GraphQL, our application is actually using [http://127.0.0.1:5000/graphql](http://127.0.0.1:5000/graphql). We use GraphiQL for our playground. Here we can test our GraphQL APIs and explore the documentation. For example, if we wanted to get all the activities, we can run the following in our GraphiQL playground. 
+
+Note that in order for you to be able to run requests successfully, you need to add your current IP address to the network access list on Mongo DB. Simply login to your mongo db account, click network access on the left panel, and click ADD IP ADDRESS.
 
 ```
 {

@@ -86,5 +86,11 @@ class Query(ObjectType):
         today = datetime.today()
         last_week = today - timedelta(days=7)
         return Transaction.objects(transaction_date__gte=last_week)
+    
+    transactions_from_last_month = graphene.List(TransactionType)
+    def resolve_transactions_from_last_month(self, info):
+        today = datetime.today()
+        last_month = today - timedelta(days=30)
+        return Transaction.objects(transaction_date__gte=last_month)
 
 schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])
