@@ -1,3 +1,6 @@
 *.pem
 passwords.py
 .DS_Store
+.env
+__pycache__/
+*.pyc

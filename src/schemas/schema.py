@@ -35,6 +35,7 @@ from schemas.mutations.account import (
     CreateAccountMutation
 )
 from models.models import Transaction, ContributionLimit
+from cache.queries import CachedAccountsField, transactions_by_account
 
 class Mutations(ObjectType):
     create_platform = CreatePlatformMutation.Field()
@@ -52,7 +53,7 @@ class Mutations(ObjectType):
 class Query(ObjectType):
     node = Node.Field
 
-    accounts = MongoengineConnectionField(AccountType)
+    accounts = CachedAccountsField(AccountType)
     activities = MongoengineConnectionField(ActivityType)
     currencies = MongoengineConnectionField(CurrencyType)
     platforms = MongoengineConnectionField(PlatformType)
@@ -67,7 +68,7 @@ class Query(ObjectType):
     
     transactions_by_account = graphene.List(TransactionType, account=graphene.ID())
     def resolve_transactions_by_account(self, info, account):
-        return Transaction.objects.filter(account=account)
+        return transactions_by_account(account)
     
     transactions_by_platform = graphene.List(TransactionType, platform=graphene.ID())
     def resolve_transactions_by_platform(self, info, platform):

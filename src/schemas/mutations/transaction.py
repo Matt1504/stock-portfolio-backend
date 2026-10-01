@@ -14,6 +14,7 @@ from models.models import (
     Platform
 )
 from type.transaction import TransactionType 
+from cache.queries import invalidate_transactions
 
 class TransactionInput(InputObjectType):
     id = ID()
@@ -52,6 +53,7 @@ class CreateTransactionMutation(Mutation):
             total = trans_data.total
         ) 
         transaction.save()
+        invalidate_transactions()
 
         return CreateTransactionMutation(transaction=transaction)
 
@@ -89,6 +91,7 @@ class UpdateTransactionMutation(Mutation):
             trans.total = trans_data.total
 
         trans.save()
+        invalidate_transactions()
     
         return UpdateTransactionMutation(trans=trans)
 
@@ -111,6 +114,10 @@ class TransferTransactionMutation(Mutation):
             success = True
         except Exception:
             success = False
+        finally:
+            # A transfer can partially save before failing. Retire cached
+            # transaction lists even when only some documents were moved.
+            invalidate_transactions()
         return TransferTransactionMutation(success=success)
 
 class DeleteTransactionMutation(Mutation):
@@ -122,6 +129,7 @@ class DeleteTransactionMutation(Mutation):
     def mutate(self, info, id):
         try:
             Transaction.objects.get(pk=id).delete()
+            invalidate_transactions()
             success = True
         except Exception:
             success = False

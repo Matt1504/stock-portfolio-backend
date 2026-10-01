@@ -33,6 +33,84 @@ Set up and Flask App
 ```bash
 export FLASK_APP=app.py
 ```
+## Redis caching
+
+The first caching stage covers `accounts` (7 days) and
+`transactionsByAccount` (1 day). Other GraphQL queries still read MongoDB.
+MongoDB remains the source of truth; Redis is optional and disposable.
+
+From the backend repository root, activate your existing virtual environment
+and install the updated requirements. If Docker Compose is installed, you can
+start the supplied local Redis service:
+
+```bash
+source src/bin/activate
+pip install -r requirements.txt
+docker compose up -d redis
+export REDIS_URL=redis://127.0.0.1:6379/0
+export APP_ENV=development
+cd src
+python3 app.py
+```
+
+An existing Redis service can be used instead by setting `REDIS_URL` to its
+connection URL (`rediss://` for TLS). The local Compose service is bound to
+loopback, limited to 128 MB, and does not persist cache entries across restarts.
+No MongoDB container or database reset is involved.
+
+Configuration is read from environment variables at process startup. See
+`.env.example` for all options; the app does **not** automatically load that file.
+
+| Variable | Default | Purpose |
+| --- | --- | --- |
+| `REDIS_URL` | unset | Redis connection URL; caching is disabled without it |
+| `CACHE_ENABLED` | true when a URL is set | Set to `false` to bypass caching |
+| `APP_ENV` | `development` | Separates development/test/production cache keys |
+| `CACHE_NAMESPACE` | `stock-portfolio` | Use a unique value for each MongoDB database/deployment |
+| `CACHE_REFERENCE_TTL_SECONDS` | `604800` | Account cache lifetime (7 days) |
+| `CACHE_TRANSACTION_TTL_SECONDS` | `86400` | Transaction cache lifetime (1 day) |
+| `CACHE_REDIS_TIMEOUT_SECONDS` | `0.25` | Redis connection and command timeout |
+
+On a miss, the backend reads MongoDB and stores BSON JSON document snapshots.
+Nested references are materialized so a cache hit does not trigger lazy MongoDB
+reads for stock, platform, account, activity, or currency details. Account filter
+arguments have separate keys; Relay pagination is applied to the cached filtered
+dataset, preserving `edges`, cursors, and `pageInfo`. Transaction keys include
+the account ID. Empty results are cached too.
+
+Successful account mutations invalidate accounts and transaction snapshots.
+Transaction, stock, and platform mutations invalidate transaction snapshots.
+Transfers also invalidate on partial failure. Invalidation changes namespace
+generation tokens, making every previous query variant unreachable; those
+entries expire normally. An overlapping read can only populate its old generation.
+
+Redis errors fall back to MongoDB. If invalidation fails, the writing process
+remembers it and retries before serving cached reads after Redis recovers.
+This pending state is process-local: a restart or other workers can still serve
+older entries until their TTL expires if invalidation was missed. The initial
+implementation targets the existing single-process Flask app; reliable
+invalidation across worker restarts would need a durable event/outbox mechanism.
+
+Writes made directly in MongoDB or through scripts bypass mutation invalidation.
+Before reseeding or editing data outside the API, stop the app and rotate
+`CACHE_NAMESPACE` to a new value before restarting; old entries expire naturally.
+Do not run `database_init.py` as a cache setup step: it deletes the MongoDB database.
+
+For diagnostics, enable DEBUG logging for `cache.backend` to see cache hits and
+misses. Redis failures are logged at WARNING without connection credentials.
+The frontend still sends GraphQL requests; Apollo cache changes are a later stage.
+
+### Cache tests
+
+```bash
+pip install -r requirements-dev.txt
+python3 -m unittest discover -s tests -v
+```
+
+The tests use fakeredis and mongomock, never production MongoDB credentials or
+a live Redis service. They check TTLs, filters, pagination, nested references,
+mutation invalidation, overlapping reads, and Redis failure/recovery.
+
 ## Initializing your Data
 By default, your database should be empty with no collections. We will run database_init.py to seed your database with data from startup.json. Running this will delete your current database and create the necessary collections
 

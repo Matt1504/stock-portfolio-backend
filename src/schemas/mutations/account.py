@@ -9,6 +9,7 @@ from models.models import (
     Account
 )
 from type.account import AccountType
+from cache.queries import invalidate_accounts
 
 class  AccountInput(InputObjectType):
     id = ID()
@@ -29,5 +30,6 @@ class CreateAccountMutation(Mutation):
             code=account_data.code
         )
         account.save()
+        invalidate_accounts()
 
         return CreateAccountMutation(account=account)

@@ -5,6 +5,7 @@ mongoengine
 flask
 flask_graphql
 flask-cors
+redis >= 5, < 6
 
 ###### Requirements with Version Specifiers ######
 graphql-core == 2.2.1

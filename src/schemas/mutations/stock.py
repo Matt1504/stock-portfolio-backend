@@ -10,6 +10,7 @@ from models.models import (
     Stock,
 )
 from type.stock import StockType 
+from cache.queries import invalidate_transactions
 
 class StockInput(InputObjectType):
     id = ID()
@@ -32,6 +33,7 @@ class CreateStockMutation(Mutation):
             currency=stock_data.currency
         ) 
         stock.save()
+        invalidate_transactions()
 
         return CreateStockMutation(stock=stock)
 
@@ -51,6 +53,7 @@ class UpdateStockMutation(Mutation):
             stock.currency = stock_data.currency
 
         stock.save()
+        invalidate_transactions()
     
         return UpdateStockMutation(stock=stock)
 
@@ -63,6 +66,7 @@ class DeleteStockMutation(Mutation):
     def mutate(self, info, id):
         try:
             Stock.objects.get(pk=id).delete()
+            invalidate_transactions()
             success = True
         except Exception:
             success = False

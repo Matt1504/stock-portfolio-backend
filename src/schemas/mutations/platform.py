@@ -10,6 +10,7 @@ from models.models import (
     Platform
 )
 from type.platform import PlatformType
+from cache.queries import invalidate_transactions
 
 class  PlatformInput(InputObjectType):
     id = ID()
@@ -30,6 +31,7 @@ class CreatePlatformMutation(Mutation):
             currency=platform_data.currency
         )
         platform.save()
+        invalidate_transactions()
 
         return CreatePlatformMutation(platform=platform)
 
@@ -42,6 +44,7 @@ class DeletePlatformMutation(Mutation):
     def mutate(self, info, id):
         try:
             Platform.objects.get(pk=id).delete()
+            invalidate_transactions()
             success = True
         except Exception:
             success = False
