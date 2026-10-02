@@ -5,7 +5,8 @@ from models.models import (
     Activity,
     Account,
     Platform,
-    Currency
+    Currency,
+    Profile
 )
 
 client.drop_database(DATABASE)
@@ -14,6 +15,8 @@ def init_db():
     with open("startup.json") as f:
         data = json.load(f)
     
+    profile = Profile(name="Default").save()
+
     cad = None
     usd = None 
 
@@ -49,7 +52,7 @@ def init_db():
         if elem["account"]["code"] == "RRSP":
             acc = rrsp.to_dbref()
         
-        platform = Platform(name=elem["name"], account=acc, currency=curr)
+        platform = Platform(name=elem["name"], account=acc, currency=curr, profile=profile)
         platform.save()
 
 init_db()

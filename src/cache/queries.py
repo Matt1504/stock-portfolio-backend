@@ -22,6 +22,11 @@ def invalidate_transactions():
     cache.invalidate(TRANSACTIONS)
 
 
+def bypass_cache(info):
+    headers = getattr(info.context, "headers", {})
+    return headers.get("X-Cache-Bypass", "").lower() == "true"
+
+
 class CachedAccountsField(MongoengineConnectionField):
     """Preserve generated account filter arguments and Relay pagination."""
 
@@ -48,6 +53,7 @@ class CachedAccountsField(MongoengineConnectionField):
             load,
             encode_documents,
             partial(decode_documents, self.model),
+            force_refresh=bypass_cache(info),
         )
         # Cache the filtered dataset and apply pagination afterwards, so cursor
         # variants share data but retain the same edges and pageInfo contract.
@@ -63,18 +69,20 @@ class CachedAccountsField(MongoengineConnectionField):
         return connection
 
 
-def transactions_by_account(account):
+def transactions_by_account(account, profile_id, force_refresh=False):
+    from schemas.profiles import personal_records
     if not cache.enabled:
-        return Transaction.objects.filter(account=account)
+        return personal_records(Transaction, profile_id).filter(account=account)
 
     def load():
-        return Transaction.objects.filter(account=account).select_related(max_depth=3)
+        return personal_records(Transaction, profile_id).filter(account=account).select_related(max_depth=3)
 
     return cache.get_or_load(
         TRANSACTIONS,
-        {"query": "by_account", "account": account},
+        {"query": "by_account", "account": account, "profile": profile_id},
         cache.settings.transaction_ttl,
         load,
         encode_documents,
         partial(decode_documents, Transaction),
+        force_refresh=force_refresh,
     )

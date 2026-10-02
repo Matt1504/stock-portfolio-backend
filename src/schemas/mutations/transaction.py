@@ -4,17 +4,19 @@ from graphene import (
     Mutation,
     String, 
     Field, 
-    Int,
     Decimal,
     Boolean,
     Date
 )
 from models.models import (
     Transaction,
-    Platform
+    Platform,
+    Activity
 )
 from type.transaction import TransactionType 
 from cache.queries import invalidate_transactions
+from schemas.profiles import owned_platform, owned_record
+from graphql import GraphQLError
 
 class TransactionInput(InputObjectType):
     id = ID()
@@ -22,7 +24,7 @@ class TransactionInput(InputObjectType):
     stock = ID()
     platform = ID()
     price = Decimal()
-    shares = Int()
+    shares = Decimal()
     description = String()
     fee = Decimal()
     transaction_date = Date()
@@ -36,12 +38,19 @@ class CreateTransactionMutation(Mutation):
 
     class Arguments:
         trans_data = TransactionInput(required=True)
+        profile_id = ID(required=True)
 
-    def mutate(self, info, trans_data=None):
+    def mutate(self, info, profile_id, trans_data=None):
+        platform = owned_platform(profile_id, trans_data.platform)
+        if trans_data.account and str(platform.account.id) != str(trans_data.account):
+            raise GraphQLError("Account type must match the platform.")
+        activity = Activity.objects(id=trans_data.activity).first() if trans_data.activity else None
+        if activity and activity.name in ("Contribution", "Withdrawal") and trans_data.stock:
+            raise GraphQLError("{} transactions cannot have a stock.".format(activity.name))
         transaction = Transaction(
             stock = trans_data.stock,
-            account = trans_data.account,
-            platform = trans_data.platform,
+            account = platform.account,
+            platform = platform,
             price = trans_data.price,
             shares = trans_data.shares,
             description = trans_data.description,
@@ -62,37 +71,29 @@ class UpdateTransactionMutation(Mutation):
 
     class Arguments:
         trans_data = TransactionInput(required=True)
+        profile_id = ID(required=True)
 
-    def mutate(self, info, trans_data=None):
-        trans = Transaction.objects.get(pk=trans_data.id)
-        if (trans_data.stock):
-            trans.stock = trans_data.stock
-        if (trans_data.account):
-            trans.account = trans_data.account
-        if (trans_data.platform):
-            trans.platform = trans_data.platform
-        if (trans_data.price):
-            trans.price = trans_data.price
-        if (trans_data.description):
-            trans.description = trans_data.description
-        if (trans_data.shares):
-            trans.shares = trans_data.shares
-        if (trans_data.fee):
-            trans.fee = trans_data.fee
-        if (trans_data.transaction_date):
-            trans.transaction_date = trans_data.transaction_date
-        if (trans_data.activity):
-            trans.activity = trans_data.activity
-        if (trans_data.rate):
-            trans.rate = trans_data.rate
-        if (trans_data.maturity_date):
-            trans.maturity_date = trans_data.maturity_date
-        if (trans_data.total):
-            trans.total = trans_data.total
-
+    def mutate(self, info, profile_id, trans_data=None):
+        trans = owned_record(Transaction, profile_id, trans_data.id)
+        platform = owned_platform(profile_id, trans_data.platform) if trans_data.platform else trans.platform
+        if trans_data.account and str(platform.account.id) != str(trans_data.account):
+            raise GraphQLError("Account type must match the platform.")
+        if platform.currency != trans.platform.currency:
+            raise GraphQLError("Platform changes must use the same currency.")
+        trans.platform = platform
+        trans.account = platform.account
+        # Accept zero values: fees and totals may legitimately be reset to zero.
+        for name in ("stock", "price", "description", "shares", "fee", "transaction_date", "activity", "rate", "maturity_date", "total"):
+            if name in trans_data:
+                value = trans_data[name]
+                if name in ("stock", "activity") and value is not None:
+                    value = trans._fields[name].to_python(value)
+                setattr(trans, name, value)
+        activity = Activity.objects(id=trans_data.activity).first() if trans_data.activity else trans.activity
+        if activity and activity.name in ("Contribution", "Withdrawal") and trans.stock:
+            raise GraphQLError("{} transactions cannot have a stock.".format(activity.name))
         trans.save()
         invalidate_transactions()
-    
         return UpdateTransactionMutation(trans=trans)
 
 class TransferTransactionMutation(Mutation):
@@ -102,14 +103,22 @@ class TransferTransactionMutation(Mutation):
     class Arguments:
         trans_from = ID(required=True)
         trans_to = ID(required=True)
+        profile_id = ID(required=True)
 
     success = Boolean()
-    def mutate(self, info, trans_from, trans_to):
+    def mutate(self, info, trans_from, trans_to, profile_id):
+        source = owned_platform(profile_id, trans_from)
+        destination = owned_platform(profile_id, trans_to)
+        if source.account != destination.account or source.currency != destination.currency:
+            raise GraphQLError("Transfers must use the same account type and currency.")
+        if source.id == destination.id:
+            raise GraphQLError("Choose a different destination platform.")
         try:
-            trans = Transaction.objects.filter(platform=trans_from)
-            platform = Platform.objects.get(pk=trans_to)
+            trans = Transaction.objects.filter(platform=source)
+            platform = destination
             for tran in trans:
                 tran.platform = platform
+                tran.account = platform.account
                 tran.save()
             success = True
         except Exception:
@@ -123,12 +132,14 @@ class TransferTransactionMutation(Mutation):
 class DeleteTransactionMutation(Mutation):
     class Arguments:
         id = ID(required=True)
+        profile_id = ID(required=True)
         
     success = Boolean()
 
-    def mutate(self, info, id):
+    def mutate(self, info, id, profile_id):
+        transaction = owned_record(Transaction, profile_id, id)
         try:
-            Transaction.objects.get(pk=id).delete()
+            transaction.delete()
             invalidate_transactions()
             success = True
         except Exception:

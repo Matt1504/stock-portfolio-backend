@@ -1,9 +1,11 @@
 import os
+import re
 import sys
 import unittest
 from dataclasses import replace
 from datetime import date
 from decimal import Decimal
+from types import SimpleNamespace
 from pathlib import Path
 from unittest.mock import Mock, patch
 
@@ -17,7 +19,7 @@ from cache.backend import ReadCache
 from cache.documents import decode_documents, encode_documents
 from cache.queries import invalidate_transactions
 from cache.settings import CacheSettings
-from models.models import Account, Activity, Currency, Platform, Stock, Transaction
+from models.models import Account, Activity, Currency, Platform, Stock, Transaction, Profile
 from schemas.schema import schema
 
 
@@ -189,18 +191,19 @@ class GraphQLCacheTests(unittest.TestCase):
         disconnect()
 
     def setUp(self):
-        for model in (Transaction, Stock, Platform, Account, Activity, Currency):
+        for model in (Transaction, Stock, Platform, Account, Activity, Currency, Profile):
             model.drop_collection()
         self.redis = fakeredis.FakeRedis(decode_responses=True)
         self.cache = ReadCache(SETTINGS, client=self.redis)
         self.cache_patch = patch("cache.queries.cache", self.cache)
         self.cache_patch.start()
         self.addCleanup(self.cache_patch.stop)
+        self.profile = Profile(name="Owner").save()
         self.account = Account(name="Tax-Free Savings", code="TFSA").save()
         self.other_account = Account(name="Retirement", code="RRSP").save()
         self.currency = Currency(name="Canadian Dollar", code="CAD").save()
-        self.platform = Platform(name="Broker", account=self.account, currency=self.currency).save()
-        self.destination = Platform(name="New Broker", account=self.account, currency=self.currency).save()
+        self.platform = Platform(name="Broker", account=self.account, currency=self.currency, profile=self.profile).save()
+        self.destination = Platform(name="New Broker", account=self.account, currency=self.currency, profile=self.profile).save()
         self.stock = Stock(name="Example", ticker="EX", currency=self.currency).save()
         self.activity = Activity(name="Buy").save()
         self.transaction = Transaction(
@@ -210,8 +213,11 @@ class GraphQLCacheTests(unittest.TestCase):
             transaction_date=date(2025, 1, 2), description="Example purchase",
         ).save()
 
-    def execute(self, query, variables=None):
-        result = schema.execute(query, variables=variables)
+    def execute(self, query, variables=None, context=None):
+        for field in ("transactionsByAccount", "createTransaction", "updateTransaction", "deleteTransaction", "transferAccount"):
+            query = re.sub(r"\b" + field + r"\(", field + '(profileId: "' + str(self.profile.id) + '", ', query)
+        query = query.replace("$account: ID)", "$account: ID!)")
+        result = schema.execute(query, variables=variables, context_value=context)
         self.assertFalse(result.errors, result.errors)
         return result.data
 
@@ -236,6 +242,20 @@ class GraphQLCacheTests(unittest.TestCase):
         with patch.object(mongomock.collection.Collection, "find", side_effect=AssertionError("unexpected MongoDB read")):
             self.assertEqual(self.execute(query), expected)
 
+    def test_cold_request_bypasses_and_replaces_cached_accounts_and_transactions(self):
+        query = 'query($account: ID) { accounts { edges { node { id name } } } transactionsByAccount(account: $account) { id shares } }'
+        variables = {"account": str(self.account.id)}
+        cached = self.execute(query, variables)
+        Account.objects(id=self.account.id).update_one(set__name="Changed directly")
+        Transaction.objects(account=self.account).update(set__shares=9)
+        self.assertEqual(self.execute(query, variables), cached)
+        refreshed = self.execute(query, variables, SimpleNamespace(headers={"X-Cache-Bypass": "true"}))
+        self.assertEqual(refreshed["transactionsByAccount"][0]["shares"], 9)
+        account = next(edge["node"] for edge in refreshed["accounts"]["edges"] if edge["node"]["id"] == str(self.account.id))
+        self.assertEqual(account["name"], "Changed directly")
+        with patch.object(mongomock.collection.Collection, "find", side_effect=AssertionError("unexpected MongoDB read")):
+            self.assertEqual(self.execute(query, variables), refreshed)
+
     def test_account_filters_and_cursor_pagination_share_cached_data(self):
         first = self.execute("{ accounts(first: 1) { edges { node { code } } pageInfo { hasNextPage endCursor } } }")
         cursor = first["accounts"]["pageInfo"]["endCursor"]
@@ -254,7 +274,7 @@ class GraphQLCacheTests(unittest.TestCase):
         self.assertEqual(self.transactions_query(), expected)
         with patch.object(mongomock.collection.Collection, "find", side_effect=AssertionError("unexpected MongoDB read")):
             self.assertEqual(self.transactions_query(), expected)
-        key = self.cache._key("transactions", {"query": "by_account", "account": str(self.account.id)})
+        key = self.cache._key("transactions", {"query": "by_account", "account": str(self.account.id), "profile": str(self.profile.id)})
         self.assertGreater(self.redis.ttl(key), SETTINGS.transaction_ttl - 5)
 
     def test_cached_data_supports_a_different_graphql_selection(self):

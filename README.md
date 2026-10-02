@@ -92,13 +92,12 @@ implementation targets the existing single-process Flask app; reliable
 invalidation across worker restarts would need a durable event/outbox mechanism.
 
 Writes made directly in MongoDB or through scripts bypass mutation invalidation.
-Before reseeding or editing data outside the API, stop the app and rotate
-`CACHE_NAMESPACE` to a new value before restarting; old entries expire naturally.
+After manual MongoDB edits, use Refresh to reload the displayed queries from MongoDB and replace their cache entries. To retire every cached query variant, stop the app, rotate `CACHE_NAMESPACE`, and restart; old entries expire naturally.
 Do not run `database_init.py` as a cache setup step: it deletes the MongoDB database.
 
 For diagnostics, enable DEBUG logging for `cache.backend` to see cache hits and
 misses. Redis failures are logged at WARNING without connection credentials.
-The frontend still sends GraphQL requests; Apollo cache changes are a later stage.
+The frontend uses Apollo caching for normal page loads. Refresh buttons issue fresh network requests with `X-Cache-Bypass: true`; cached backend queries read MongoDB and replace matching Redis entries.
 
 ### Cache tests
 
@@ -111,6 +110,76 @@ The tests use fakeredis and mongomock, never production MongoDB credentials or
 a live Redis service. They check TTLs, filters, pagination, nested references,
 mutation invalidation, overlapping reads, and Redis failure/recovery.
 
+## Profiles
+
+Profiles represent the people whose investments you track, rather than login
+accounts. `profiles` stores a required name and MongoDB `_id`. Platforms and
+contribution limits have a required `profile` reference. Transactions inherit
+ownership from their platform; stocks, account types, currencies and activities
+remain shared metadata. A new profile starts with no platforms or transactions.
+
+All personal GraphQL queries and mutations require `profileId`. This includes
+platform/transaction/contribution-limit connections and filtered transaction
+queries. Backend checks prevent editing another profile's transaction or moving
+it to that profile's platform. Transfers must remain within one profile and use
+the same account type and currency. Stock statistics come from only the selected
+profile's transactions. Profiles organize records; they do not add authentication
+or restrict which tracked person the application's operator can select.
+
+Account cache entries remain shared. Transaction cache keys include both the
+profile ID and account ID. Existing mutation invalidation retires all transaction
+variants, including snapshots with embedded profile data.
+
+### Upgrade existing records
+
+Stop the backend before upgrading and take a MongoDB backup. From the backend
+repository root, activate your usual environment, then audit existing records:
+
+```bash
+source src/bin/activate
+cd src
+python3 migrate_profiles.py --name "Matthew"
+```
+
+The command is a dry run by default. It reports how many existing platforms and
+contribution limits lack ownership, and stops before writes if a transaction has
+no valid platform, its account disagrees with the platform's account, or an
+existing owner reference is broken. Fix reported records before applying.
+
+Assign the records to their existing owner's profile, then restart:
+
+```bash
+python3 migrate_profiles.py --name "Matthew" --apply
+export CACHE_NAMESPACE=stock-portfolio-profiles-v2
+python3 app.py
+```
+
+Use the owner's preferred name in place of Matthew. You can instead pass
+`--profile-id <id>` to use an existing profile. The migration is rerunnable: it
+only assigns missing/null ownership, retains existing owners and transaction
+IDs, and never deletes or reseeds records. If names are duplicated, select by ID.
+Rotating the cache namespace retires snapshots created with the older schema.
+Upgrade frontend and backend together: older clients omit the required profile
+argument. **Do not run `database_init.py` to migrate an existing database.** That
+script deletes the database; it is only for fresh installations and now seeds a
+Default profile for its initial platforms.
+
+To test profile isolation and migration with fake MongoDB/Redis:
+
+```bash
+python3 -m unittest discover -s tests -v
+```
+
+### Recent transactions date range
+
+The dashboard uses `transactionsByDateRange(profileId: ID!, startDate: Date,
+endDate: Date)`. Both dates are inclusive. Either bound can be omitted; omitting
+both returns all transaction history for the selected profile. Reversed ranges
+are rejected. Results are ordered newest first. The frontend defaults to today
+and the preceding 29 calendar days, and sends updated bounds when the user
+changes the date picker. The older last-month query remains available for existing
+callers.
+
 ## Initializing your Data
 By default, your database should be empty with no collections. We will run database_init.py to seed your database with data from startup.json. Running this will delete your current database and create the necessary collections
 
@@ -120,9 +189,9 @@ python3 database_init.py
 
 The startup.json file will be all your loading data to populate your collections. It is composed of the following data
 - Currency (US, CAD currently)
-- Accounts (TFSA and RRSP, with FHSA coming when it is officially released)
+- Accounts (Shared account-type definitions listed in `src/startup.json`)
 - Platforms (The trading platforms that you use, ex: TD Direct Investing, Wealthsimple)
-- Activities (All the possible transaction activities, ex: Contribution, Buy, Sell, Dividends, etc.)
+- Activities (All the possible transaction activities, ex: Contribution, Withdrawal, Buy, Sell, Dividends, etc.)
 
 Below is a piece of the startup.json that shows the currencies model
 
@@ -228,3 +297,29 @@ to produce the response
   }
 }
 ```
+
+## Transaction quantities and platform edits
+
+Transaction shares accept decimal quantities with up to eight decimal places, including fractional buys and sells. Existing integer quantities remain readable without a data migration. GraphQL `TransactionInput.shares` uses `Decimal`, and transaction query results expose numeric share quantities. Restart the backend after changing the schema.
+
+Editing a transaction can change its account type and platform, using an existing platform in the same profile and currency. The account must match the destination platform. The API rejects incompatible changes and invalidates cached transaction lists after a successful edit.
+
+### Force a fresh read
+
+GraphQL requests with `X-Cache-Bypass: true` skip Redis reads for cached account and transaction queries, load MongoDB, and replace the matching cache entries. The application's refresh buttons send this header and bypass Apollo and browser caches. Normal page loads continue using the configured cache TTLs. Restart the backend to enable the header handling.
+
+### Withdrawal activity
+
+Fresh setups include Withdrawal. For an existing database, run `python src/add_withdrawal_activity.py --apply` from the backend project with its Python environment active. This only adds the missing activity, preserves existing IDs and transactions, and can be rerun. Without `--apply`, it only checks. Reload the frontend afterward to fetch the updated activity list.
+
+Withdrawal is a positive cash amount that subtracts from net deposits. It has no stock and does not change holdings or book cost. Contribution-limit statistics continue to use gross contributions; withdrawals do not automatically restore contribution room. Withholding Tax accepts an optional stock so account-level tax can be recorded separately.
+
+### Transaction validation and deletion
+
+Contribution and Withdrawal transactions cannot reference a stock. Withholding Tax accepts a stock or no stock. The frontend clears inapplicable fields when switching activity and strips them before submission. Existing records are not automatically cleaned by upgrading.
+
+`deleteTransaction(profileId: ID!, id: ID!)` checks profile ownership before deleting and invalidates cached transaction lists on success. The frontend asks for confirmation, refreshes active personal queries and statistics, and keeps the dialog open if deletion fails.
+
+Net deposit history uses contributions + transfers in − transfers out − withdrawals. It excludes dividends, interest, and withholding tax. Buy totals already include acquisition fees, so book cost does not add those fees twice. Shares owned statistics use up to four displayed decimal places while calculations retain the stored precision.
+
+Dividends/Interest Earned subtracts withholding tax only when the transaction references a stock. Withholding tax without a stock is treated as account-level tax and excluded from both lifetime and annual dividend/interest totals.

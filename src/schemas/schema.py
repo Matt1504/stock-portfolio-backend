@@ -1,8 +1,8 @@
 import graphene 
 from datetime import datetime, timedelta
-from graphene.relay import Node
 from graphene_mongo import MongoengineConnectionField
 from graphene import ObjectType
+from graphql import GraphQLError
 from type.type import (
     AccountType,
     ActivityType,
@@ -10,7 +10,8 @@ from type.type import (
     PlatformType,
     StockType,
     TransactionType,
-    ContributionLimitType
+    ContributionLimitType,
+    ProfileType
 )
 from schemas.mutations.stock import (
     CreateStockMutation,
@@ -35,9 +36,12 @@ from schemas.mutations.account import (
     CreateAccountMutation
 )
 from models.models import Transaction, ContributionLimit
-from cache.queries import CachedAccountsField, transactions_by_account
+from schemas.profiles import ProfileConnectionField, personal_records, owned_platform
+from schemas.mutations.profile import CreateProfileMutation
+from cache.queries import CachedAccountsField, transactions_by_account, bypass_cache
 
 class Mutations(ObjectType):
+    create_profile = CreateProfileMutation.Field()
     create_platform = CreatePlatformMutation.Field()
     delete_platform = DeletePlatformMutation.Field()
     create_stock = CreateStockMutation.Field()
@@ -51,47 +55,62 @@ class Mutations(ObjectType):
     delete_contribution_limit = DeleteContributionLimitMutation.Field()
     create_account = CreateAccountMutation.Field()
 class Query(ObjectType):
-    node = Node.Field
 
     accounts = CachedAccountsField(AccountType)
     activities = MongoengineConnectionField(ActivityType)
     currencies = MongoengineConnectionField(CurrencyType)
-    platforms = MongoengineConnectionField(PlatformType)
+    profiles = MongoengineConnectionField(ProfileType)
+    platforms = ProfileConnectionField(PlatformType)
     stocks = MongoengineConnectionField(StockType)
-    transactions = MongoengineConnectionField(TransactionType)
-    contribution_limits = MongoengineConnectionField(ContributionLimitType)
+    transactions = ProfileConnectionField(TransactionType)
+    contribution_limits = ProfileConnectionField(ContributionLimitType)
 
     # TODO: Move these to its own file similar to mutation
-    transactions_by_stock = graphene.List(TransactionType, stock=graphene.ID())
-    def resolve_transactions_by_stock(self, info, stock):
-        return Transaction.objects.filter(stock=stock)
+    transactions_by_stock = graphene.List(TransactionType, profile_id=graphene.ID(required=True), stock=graphene.ID(required=True))
+    def resolve_transactions_by_stock(self, info, profile_id, stock):
+        return personal_records(Transaction, profile_id).filter(stock=stock)
     
-    transactions_by_account = graphene.List(TransactionType, account=graphene.ID())
-    def resolve_transactions_by_account(self, info, account):
-        return transactions_by_account(account)
+    transactions_by_account = graphene.List(TransactionType, profile_id=graphene.ID(required=True), account=graphene.ID(required=True))
+    def resolve_transactions_by_account(self, info, profile_id, account):
+        return transactions_by_account(account, profile_id, force_refresh=bypass_cache(info))
     
-    transactions_by_platform = graphene.List(TransactionType, platform=graphene.ID())
-    def resolve_transactions_by_platform(self, info, platform):
-        return Transaction.objects.filter(platform=platform)
+    transactions_by_platform = graphene.List(TransactionType, profile_id=graphene.ID(required=True), platform=graphene.ID(required=True))
+    def resolve_transactions_by_platform(self, info, profile_id, platform):
+        owned_platform(profile_id, platform)
+        return personal_records(Transaction, profile_id).filter(platform=platform)
     
-    transactions_by_activity = graphene.List(TransactionType, activity=graphene.ID())
-    def resolve_transactions_by_activity(self, info, activity):
-        return Transaction.objects.filter(activity=activity)
+    transactions_by_activity = graphene.List(TransactionType, profile_id=graphene.ID(required=True), activity=graphene.ID(required=True))
+    def resolve_transactions_by_activity(self, info, profile_id, activity):
+        return personal_records(Transaction, profile_id).filter(activity=activity)
     
-    contribution_limits_by_account = graphene.List(ContributionLimitType, account=graphene.ID())
-    def resolve_contribution_limits_by_account(self, info, account):
-        return ContributionLimit.objects.filter(account=account)
+    contribution_limits_by_account = graphene.List(ContributionLimitType, profile_id=graphene.ID(required=True), account=graphene.ID(required=True))
+    def resolve_contribution_limits_by_account(self, info, profile_id, account):
+        return personal_records(ContributionLimit, profile_id).filter(account=account)
     
-    transactions_from_this_week = graphene.List(TransactionType)
-    def resolve_transactions_from_this_week(self, info):
+    transactions_by_date_range = graphene.List(
+        TransactionType, profile_id=graphene.ID(required=True),
+        start_date=graphene.Date(), end_date=graphene.Date(),
+    )
+    def resolve_transactions_by_date_range(self, info, profile_id, start_date=None, end_date=None):
+        if start_date and end_date and start_date > end_date:
+            raise GraphQLError("Start date must be on or before end date.")
+        transactions = personal_records(Transaction, profile_id)
+        if start_date:
+            transactions = transactions.filter(transaction_date__gte=start_date)
+        if end_date:
+            transactions = transactions.filter(transaction_date__lte=end_date)
+        return transactions.order_by("-transaction_date", "-id")
+
+    transactions_from_this_week = graphene.List(TransactionType, profile_id=graphene.ID(required=True))
+    def resolve_transactions_from_this_week(self, info, profile_id):
         today = datetime.today()
         last_week = today - timedelta(days=7)
-        return Transaction.objects(transaction_date__gte=last_week)
+        return personal_records(Transaction, profile_id).filter(transaction_date__gte=last_week)
     
-    transactions_from_last_month = graphene.List(TransactionType)
-    def resolve_transactions_from_last_month(self, info):
+    transactions_from_last_month = graphene.List(TransactionType, profile_id=graphene.ID(required=True))
+    def resolve_transactions_from_last_month(self, info, profile_id):
         today = datetime.today()
         last_month = today - timedelta(days=30)
-        return Transaction.objects(transaction_date__gte=last_month)
+        return personal_records(Transaction, profile_id).filter(transaction_date__gte=last_month)
 
-schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType])
+schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType, ProfileType])

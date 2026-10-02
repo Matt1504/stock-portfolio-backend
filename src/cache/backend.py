@@ -90,12 +90,12 @@ class ReadCache:
         digest = hashlib.sha256(arguments.encode("utf-8")).hexdigest()
         return "{}:{}:{}:{}".format(self.settings.prefix, namespace, generation, digest)
 
-    def get_or_load(self, namespace, parameters, ttl, loader, encode, decode):
+    def get_or_load(self, namespace, parameters, ttl, loader, encode, decode, force_refresh=False):
         if not self.enabled:
             return loader()
         try:
             key = self._key(namespace, parameters)
-            payload = self.client.get(key)
+            payload = None if force_refresh else self.client.get(key)
         except RedisError:
             logger.warning("Redis read failed; using MongoDB")
             return loader()

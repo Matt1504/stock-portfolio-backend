@@ -5,11 +5,13 @@ from  mongoengine.fields import (
     ObjectIdField
 )
 from models.account import Account
+from models.profile import Profile
 from models.currency import Currency
 
 class Platform(Document):
-    meta = {"collection": "platforms"}
+    meta = {"collection": "platforms", "indexes": ["profile", ("profile", "account", "currency")]}
     ID = ObjectIdField()
     name = StringField()
     account = ReferenceField(Account)
     currency = ReferenceField(Currency)
+    profile = ReferenceField(Profile, required=True)

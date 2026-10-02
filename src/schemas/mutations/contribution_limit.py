@@ -10,7 +10,8 @@ from graphene import (
 from models.models import (
     ContributionLimit,
 )
-from type.contribution_limit import ContributionLimitType 
+from type.contribution_limit import ContributionLimitType
+from schemas.profiles import require_profile, owned_record
 
 class ContributionLimitInput(InputObjectType):
     id = ID()
@@ -23,9 +24,11 @@ class CreateContributionLimitMutation(Mutation):
 
     class Arguments:
         contr_limit_data = ContributionLimitInput(required=True)
+        profile_id = ID(required=True)
 
-    def mutate(self, info, contr_limit_data=None):
+    def mutate(self, info, profile_id, contr_limit_data=None):
         contribution_limit = ContributionLimit(
+            profile=require_profile(profile_id),
             yearEnd = contr_limit_data.yearEnd,
             account = contr_limit_data.account,
             amount = contr_limit_data.amount
@@ -37,12 +40,14 @@ class CreateContributionLimitMutation(Mutation):
 class DeleteContributionLimitMutation(Mutation):
     class Arguments:
         id = ID(required=True)
+        profile_id = ID(required=True)
         
     success = Boolean()
 
-    def mutate(self, info, id):
+    def mutate(self, info, id, profile_id):
+        limit = owned_record(ContributionLimit, profile_id, id)
         try:
-            ContributionLimit.objects.get(pk=id).delete()
+            limit.delete()
             success = True
         except Exception:
             success = False
