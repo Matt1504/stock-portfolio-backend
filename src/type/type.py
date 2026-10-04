@@ -1,3 +1,4 @@
+from type.asset import AssetType
 from type.account import AccountType
 from type.activity import ActivityType
 from type.currency import CurrencyType

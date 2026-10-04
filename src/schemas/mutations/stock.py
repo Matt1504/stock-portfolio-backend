@@ -8,15 +8,27 @@ from graphene import (
 )
 from models.models import (
     Stock,
+    Asset,
 )
 from type.stock import StockType 
 from cache.queries import invalidate_transactions
+from graphql import GraphQLError
+
+def stock_asset(asset_id):
+    if asset_id:
+        asset = Asset.objects(pk=asset_id).first()
+        if not asset:
+            raise GraphQLError("Asset type does not exist.")
+        return asset
+    return Asset.objects(name="Stock").modify(upsert=True, new=True, set_on_insert__name="Stock")
+
 
 class StockInput(InputObjectType):
     id = ID()
     name = String()
     ticker = String()
     currency = ID()
+    asset_id = ID()
 
 class CreateStockMutation(Mutation):
     stock = Field(StockType)
@@ -30,7 +42,8 @@ class CreateStockMutation(Mutation):
         stock = Stock(
             name=stock_data.name,
             ticker=stock_data.ticker,
-            currency=stock_data.currency
+            currency=stock_data.currency,
+            asset=stock_asset(stock_data.asset_id)
         ) 
         stock.save()
         invalidate_transactions()
@@ -52,6 +65,8 @@ class UpdateStockMutation(Mutation):
         if (stock_data.currency):
             stock.currency = stock_data.currency
 
+        if stock_data.asset_id:
+            stock.asset = stock_asset(stock_data.asset_id)
         stock.save()
         invalidate_transactions()
     
@@ -64,6 +79,11 @@ class DeleteStockMutation(Mutation):
     success = Boolean()
 
     def mutate(self, info, id):
+        from mongoengine import Q
+        from models.models import Transaction
+        from graphql import GraphQLError
+        if Transaction.objects(Q(stock=id) | Q(spinoff_source=id), spinoff_source__ne=None).first():
+            raise GraphQLError("Remove linked spinoff transactions before deleting this stock.")
         try:
             Stock.objects.get(pk=id).delete()
             invalidate_transactions()

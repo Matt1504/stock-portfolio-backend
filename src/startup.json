@@ -17,6 +17,11 @@
         {
             "name": "Registered Retirement Savings Plan",
             "code": "RRSP"
+        },
+        {
+            "name": "Non-Registered Savings Account",
+            "code": "NRSA",
+            "has_contribution_limit": false
         }
     ],
     "platforms": [
@@ -143,35 +148,67 @@
         }
     ],
     "activities": [
-       {
-        "name": "Contribution"
-       },
-       {
-        "name": "Withdrawal"
-       },
-       {
-        "name": "Transfer In"
-       },
-       {
-        "name": "Transfer Out"
-       },
-       {
-        "name": "Buy"
-       },
-       {
-        "name": "Sell"
-       },
-       {
-        "name": "Dividends"
-       },
-       {
-        "name": "Withholding Tax"
-       },
-       {
-        "name": "Adjustment"
-       },
-       {
-        "name": "Stock Split"
-       }
+        {
+            "name": "SEC Fee"
+        },
+        {
+            "name": "ETF Rebate"
+        },
+        {
+            "name": "Service Fee"
+        },
+        {
+            "name": "Contribution"
+        },
+        {
+            "name": "Withdrawal"
+        },
+        {
+            "name": "Transfer In"
+        },
+        {
+            "name": "Transfer Out"
+        },
+        {
+            "name": "Buy"
+        },
+        {
+            "name": "Sell"
+        },
+        {
+            "name": "Dividends"
+        },
+        {
+            "name": "Withholding Tax"
+        },
+        {
+            "name": "Adjustment"
+        },
+        {
+            "name": "Stock Split"
+        },
+        {
+            "name": "GIC Maturity"
+        },
+        {
+            "name": "Interest"
+        },
+        {
+            "name": "Stock Spinoff"
+        }
+    ],
+    "assets": [
+        {
+            "name": "Stock"
+        },
+        {
+            "name": "Index Fund"
+        },
+        {
+            "name": "Mutual Fund"
+        },
+        {
+            "name": "GIC"
+        }
     ]
 }

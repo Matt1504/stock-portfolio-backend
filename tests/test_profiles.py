@@ -171,12 +171,15 @@ class ProfileTests(unittest.TestCase):
         result = self.execute('mutation($profile: ID!, $trans: TransactionInput!) { updateTransaction(profileId: $profile, transData: $trans) { trans { stock { id } } } }', variables)
         self.assertIsNone(result.data["updateTransaction"]["trans"]["stock"])
 
-    def test_withholding_tax_accepts_optional_stock(self):
-        tax = Activity(name="Withholding Tax").save()
+    def test_interest_and_withholding_tax_accept_optional_stock(self):
         query = 'mutation($profile: ID!, $trans: TransactionInput!) { createTransaction(profileId: $profile, transData: $trans) { transaction { stock { id } total } } }'
-        for stock in (None, str(self.stock.id)):
-            result = self.execute(query, {"profile": str(self.alice.id), "trans": {"platform": str(self.pa.id), "activity": str(tax.id), "stock": stock, "total": "25"}})
-            self.assertEqual(result.data["createTransaction"]["transaction"]["stock"], {"id": stock} if stock else None)
+        for name in ("Withholding Tax", "Interest"):
+            activity = Activity(name=name).save()
+            for stock in (None, str(self.stock.id)):
+                with self.subTest(activity=name, stock=stock):
+                    result = self.execute(query, {"profile": str(self.alice.id), "trans": {"platform": str(self.pa.id), "activity": str(activity.id), "stock": stock, "total": "25"}})
+                    self.assertIsNone(result.errors)
+                    self.assertEqual(result.data["createTransaction"]["transaction"]["stock"], {"id": stock} if stock else None)
 
     def test_withdrawal_setup_is_idempotent_and_transactions_are_cash_only(self):
         self.assertIsNone(add_withdrawal_activity())
@@ -202,7 +205,7 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(self.tb.reload().total, 70)
         self.assertEqual(self.ta.reload().platform.id, self.pa.id)
 
-    def test_update_platform_and_account_require_same_currency_and_profile(self):
+    def test_update_platform_and_account_require_owned_destination_and_reviewed_currency_amounts(self):
         destination = Platform(name="Other Broker", account=self.account, currency=self.currency, profile=self.alice).save()
         wrong_account = Platform(name="RRSP Broker", account=Account(code="RRSP").save(), currency=self.currency, profile=self.alice).save()
         wrong_currency = Platform(name="USD Broker", account=self.account, currency=Currency(code="USD").save(), profile=self.alice).save()

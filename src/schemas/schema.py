@@ -1,9 +1,11 @@
 import graphene 
+from mongoengine import Q
 from datetime import datetime, timedelta
 from graphene_mongo import MongoengineConnectionField
 from graphene import ObjectType
 from graphql import GraphQLError
 from type.type import (
+    AssetType,
     AccountType,
     ActivityType,
     CurrencyType,
@@ -21,6 +23,7 @@ from schemas.mutations.stock import (
 from schemas.mutations.transaction import (
     CreateTransactionMutation,
     UpdateTransactionMutation,
+    BulkUpdateTransactionsMutation,
     DeleteTransactionMutation,
     TransferTransactionMutation
 )
@@ -40,7 +43,10 @@ from schemas.profiles import ProfileConnectionField, personal_records, owned_pla
 from schemas.mutations.profile import CreateProfileMutation
 from cache.queries import CachedAccountsField, transactions_by_account, bypass_cache
 
+from schemas.statement_import import StatementPreview, ImportStatementMutation, preview_statement
+
 class Mutations(ObjectType):
+    import_statement = ImportStatementMutation.Field()
     create_profile = CreateProfileMutation.Field()
     create_platform = CreatePlatformMutation.Field()
     delete_platform = DeletePlatformMutation.Field()
@@ -49,12 +55,23 @@ class Mutations(ObjectType):
     delete_stock = DeleteStockMutation.Field()
     create_transaction = CreateTransactionMutation.Field()
     update_transaction = UpdateTransactionMutation.Field()
+    bulk_update_transactions = BulkUpdateTransactionsMutation.Field()
     delete_transaction = DeleteTransactionMutation.Field()
     transfer_account = TransferTransactionMutation.Field()
     create_contribution_limit = CreateContributionLimitMutation.Field()
     delete_contribution_limit = DeleteContributionLimitMutation.Field()
     create_account = CreateAccountMutation.Field()
 class Query(ObjectType):
+    preview_statement_import = graphene.Field(StatementPreview, profile_id=graphene.ID(required=True), platform=graphene.ID(required=True), text=graphene.String(required=True))
+    def resolve_preview_statement_import(self, info, profile_id, platform, text):
+        return preview_statement(info, profile_id, platform, text)
+
+
+    assets = MongoengineConnectionField(AssetType)
+    outstanding_gic_purchases = graphene.List(TransactionType, profile_id=graphene.ID(required=True), platform=graphene.ID(required=True), stock=graphene.ID())
+    def resolve_outstanding_gic_purchases(self, info, profile_id, platform, stock=None):
+        from schemas.gic import outstanding_purchases
+        return outstanding_purchases(profile_id, platform, stock)
 
     accounts = CachedAccountsField(AccountType)
     activities = MongoengineConnectionField(ActivityType)
@@ -68,7 +85,7 @@ class Query(ObjectType):
     # TODO: Move these to its own file similar to mutation
     transactions_by_stock = graphene.List(TransactionType, profile_id=graphene.ID(required=True), stock=graphene.ID(required=True))
     def resolve_transactions_by_stock(self, info, profile_id, stock):
-        return personal_records(Transaction, profile_id).filter(stock=stock)
+        return personal_records(Transaction, profile_id).filter(Q(stock=stock) | Q(spinoff_source=stock))
     
     transactions_by_account = graphene.List(TransactionType, profile_id=graphene.ID(required=True), account=graphene.ID(required=True))
     def resolve_transactions_by_account(self, info, profile_id, account):
@@ -113,4 +130,4 @@ class Query(ObjectType):
         last_month = today - timedelta(days=30)
         return personal_records(Transaction, profile_id).filter(transaction_date__gte=last_month)
 
-schema = graphene.Schema(query = Query, mutation=Mutations, types=[AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType, ProfileType])
+schema = graphene.Schema(query = Query, mutation=Mutations, types=[AssetType, AccountType, ActivityType, CurrencyType, PlatformType, StockType, TransactionType, ProfileType])

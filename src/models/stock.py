@@ -5,6 +5,7 @@ from  mongoengine.fields import (
     ReferenceField
 )
 from models.currency import Currency
+from models.asset import Asset
 
 class Stock(Document):
     meta = {"collection": "stocks"}
@@ -12,3 +13,4 @@ class Stock(Document):
     name = StringField()
     ticker = StringField()
     currency = ReferenceField(Currency)
+    asset = ReferenceField(Asset, db_field="asset_id")

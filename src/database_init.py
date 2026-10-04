@@ -2,6 +2,7 @@ import json
 
 from database.database import client, DATABASE
 from models.models import (
+    Asset,
     Activity,
     Account,
     Platform,
@@ -16,12 +17,13 @@ def init_db():
         data = json.load(f)
     
     profile = Profile(name="Default").save()
+    for elem in data["assets"]:
+        Asset(name=elem["name"]).save()
 
     cad = None
     usd = None 
 
-    tfsa = None
-    rrsp = None 
+    accounts_by_code = {}
 
     for elem in data["currencies"]:
         currency = Currency(name=elem["name"], code=elem["code"])
@@ -32,12 +34,9 @@ def init_db():
             usd = currency
     
     for elem in data["accounts"]:
-        account = Account(name=elem["name"], code=elem["code"])
+        account = Account(name=elem["name"], code=elem["code"], has_contribution_limit=elem.get("has_contribution_limit", True))
         account.save()
-        if account.code == "TFSA":
-            tfsa = account
-        else:
-            rrsp = account
+        accounts_by_code[account.code] = account
     
     for elem in data["activities"]:
         activity = Activity(name=elem["name"])
@@ -48,9 +47,7 @@ def init_db():
         if elem["currency"]["code"] == "USD":
             curr = usd.to_dbref()
 
-        acc = tfsa.to_dbref()
-        if elem["account"]["code"] == "RRSP":
-            acc = rrsp.to_dbref()
+        acc = accounts_by_code[elem["account"]["code"]].to_dbref()
         
         platform = Platform(name=elem["name"], account=acc, currency=curr, profile=profile)
         platform.save()

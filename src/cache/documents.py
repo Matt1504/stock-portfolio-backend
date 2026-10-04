@@ -19,7 +19,7 @@ def restore(model, value):
     document = model._from_son(value["data"])
     for name, field in model._fields.items():
         if isinstance(field, ReferenceField):
-            reference = value["references"][name]
+            reference = value["references"].get(name)
             # Install real document instances so GraphQL's normal attribute
             # resolvers do not perform MongoEngine lazy dereferencing queries.
             document._data[name] = restore(field.document_type, reference) if reference is not None else None
