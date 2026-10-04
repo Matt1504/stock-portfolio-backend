@@ -1,5 +1,18 @@
 # Stock Portfolio Backend
 
+## Docker stack
+
+The sibling `stock-portfolio-stack` project runs the frontend, this API and Redis together. The backend image uses Python 3.11 and Gunicorn; Graphene 2.1.9 / graphql-core 2.3.2 retain the existing GraphQL API while supporting the container runtime. The `/health` endpoint performs a read-only MongoDB ping. The stack's development configuration runs Flask with source hot reload.
+
+Set `MONGODB_URI` and optionally `MONGODB_DATABASE` (default `stock_portfolio`) through the environment. Local launches still support `src/database/passwords.py` when no URI is provided, but that file is excluded from images. The Docker context also excludes `.env`, the local virtual environment, and investigation PDFs under `tmp`. No database setup or migrations run on container startup.
+
+See the stack README for the complete setup. The Redis-only `compose.yaml` here remains available for existing local workflows. To run backend tests inside a container without connecting to Atlas:
+
+```sh
+docker build --target test -t stock-portfolio-backend-tests .
+docker run --rm stock-portfolio-backend-tests
+```
+
 ## Overview
 This project is the code that runs the backend server for our Stock Portfolio application. It connects to a MongoDB database that stores our data. API requests are using GraphQL and handled with Graphene-Python. The web server application is hosted using Flask. 
 
