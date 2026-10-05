@@ -8,6 +8,7 @@ from graphql import GraphQLError
 from graphql_relay.connection.arrayconnection import connection_from_list_slice
 from mongoengine import DoesNotExist, ValidationError
 from models.models import Profile, Platform, Transaction
+from query_loading import materialize_references
 
 
 def require_profile(profile_id):
@@ -54,7 +55,7 @@ class ProfileConnectionField(MongoengineConnectionField):
         # All filters, including generated reference filters, are intersected
         # with ownership. An id lookup must not bypass the profile restriction.
         filtered = self.get_queryset(self.model, info, **args)
-        documents = list(scoped.filter(pk__in=filtered.scalar("id")))
+        documents = materialize_references(scoped.filter(pk__in=filtered.scalar("id")))
         connection = connection_from_list_slice(
             list_slice=documents, args=pagination, list_length=len(documents),
             connection_type=self.type, edge_type=self.type.Edge, pageinfo_type=PageInfo,

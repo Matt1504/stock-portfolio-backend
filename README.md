@@ -488,3 +488,7 @@ Transaction prices retain up to eight decimal places, and total calculation uses
 ### SEC Fee
 
 SEC Fee is an account-level expense available only for USD trading accounts. Enter its positive amount in Total without selecting a stock. It reduces Cash Balance and Realized Profit and increases Fees Paid, like Service Fee. It does not change stock holdings, book cost, Realized Gain/Loss, net deposits, or Dividends/Interest Earned. The backend validates the currency and account-only restriction for creation, individual edits, and bulk edits. Fresh setup includes the activity. Existing databases can add it idempotently from the backend directory with `python3 src/add_sec_fee_activity.py --apply`; restart the API afterward.
+
+### Query performance diagnostics
+
+GraphQL transaction queries batch related MongoDB documents to avoid repeated per-transaction reference reads. This preserves existing profile filters, results, and cache/refresh behavior; no migration is needed. See [the measurement report](docs/transaction-fetching-performance.md) for before/after results and the read-only `scripts/benchmark_transaction_queries.py` command. Persistent analytics and bounded-history APIs are planned separately.

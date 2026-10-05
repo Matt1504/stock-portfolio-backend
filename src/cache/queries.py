@@ -7,6 +7,7 @@ from graphql_relay.connection.arrayconnection import connection_from_list_slice
 from cache.backend import cache
 from cache.documents import decode_documents, encode_documents
 from models.models import Transaction
+from query_loading import materialize_references
 
 
 ACCOUNTS = "accounts"
@@ -72,10 +73,10 @@ class CachedAccountsField(MongoengineConnectionField):
 def transactions_by_account(account, profile_id, force_refresh=False):
     from schemas.profiles import personal_records
     if not cache.enabled:
-        return personal_records(Transaction, profile_id).filter(account=account)
+        return materialize_references(personal_records(Transaction, profile_id).filter(account=account))
 
     def load():
-        return personal_records(Transaction, profile_id).filter(account=account).select_related(max_depth=3)
+        return materialize_references(personal_records(Transaction, profile_id).filter(account=account))
 
     return cache.get_or_load(
         TRANSACTIONS,
