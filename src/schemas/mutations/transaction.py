@@ -27,6 +27,8 @@ from schemas.transaction_currency import validate_currency, number
 from mongoengine import NotUniqueError, ValidationError, DoesNotExist
 from schemas.transaction_validation import TransactionWarning, validate_ownership, contribution_warnings
 
+from schemas.account_transfer import commit_transfer, protect_transfer, validate_closed_platform
+
 def validate_sec_fee(transaction):
     if not transaction.activity or transaction.activity.name != "SEC Fee":
         return
@@ -96,6 +98,7 @@ class CreateTransactionMutation(Mutation):
             gic_purchase = trans_data.gic_purchase,
             interest_calculation = trans_data.interest_calculation or "simple"
         ) 
+        validate_closed_platform(transaction)
         validate_sec_fee(transaction)
         validate_spinoffs(transaction)
         validate_ownership(transaction)
@@ -118,6 +121,7 @@ class UpdateTransactionMutation(Mutation):
 
     def mutate(self, info, profile_id, trans_data=None, invalidate=True):
         trans = owned_record(Transaction, profile_id, trans_data.id)
+        protect_transfer(trans)
         original = Transaction.objects.get(pk=trans.id)
         platform = owned_platform(profile_id, trans_data.platform) if trans_data.platform else trans.platform
         if trans_data.account and str(platform.account.id) != str(trans_data.account):
@@ -150,6 +154,7 @@ class UpdateTransactionMutation(Mutation):
         activity = Activity.objects(id=trans_data.activity).first() if trans_data.activity else trans.activity
         if activity and activity.name in ("Contribution", "Withdrawal", "Service Fee", "SEC Fee", "ETF Rebate") and trans.stock:
             raise GraphQLError("{} transactions cannot have a stock.".format(activity.name))
+        validate_closed_platform(trans)
         validate_sec_fee(trans)
         validate_spinoffs(trans, original)
         validate_ownership(trans, original)
@@ -210,37 +215,18 @@ class BulkUpdateTransactionsMutation(Mutation):
 
 
 class TransferTransactionMutation(Mutation):
-    transFrom = Field(TransactionType)
-    transTo = Field(TransactionType)
-
     class Arguments:
         trans_from = ID(required=True)
         trans_to = ID(required=True)
         profile_id = ID(required=True)
+        transfer_date = Date(required=True)
+        close_original_account = Boolean(default_value=True)
 
-    success = Boolean()
-    def mutate(self, info, trans_from, trans_to, profile_id):
-        source = owned_platform(profile_id, trans_from)
-        destination = owned_platform(profile_id, trans_to)
-        if source.account != destination.account or source.currency != destination.currency:
-            raise GraphQLError("Transfers must use the same account type and currency.")
-        if source.id == destination.id:
-            raise GraphQLError("Choose a different destination platform.")
-        try:
-            trans = Transaction.objects.filter(platform=source)
-            platform = destination
-            for tran in trans:
-                tran.platform = platform
-                tran.account = platform.account
-                tran.save()
-            success = True
-        except Exception:
-            success = False
-        finally:
-            # A transfer can partially save before failing. Retire cached
-            # transaction lists even when only some documents were moved.
-            invalidate_transactions()
-        return TransferTransactionMutation(success=success)
+    success = Boolean(required=True)
+    def mutate(self, info, trans_from, trans_to, profile_id, transfer_date, close_original_account=True):
+        commit_transfer(profile_id, trans_from, trans_to, transfer_date, close_original_account)
+        invalidate_transactions()
+        return TransferTransactionMutation(success=True)
 
 class DeleteTransactionMutation(Mutation):
     class Arguments:
@@ -251,6 +237,7 @@ class DeleteTransactionMutation(Mutation):
 
     def mutate(self, info, id, profile_id):
         transaction = owned_record(Transaction, profile_id, id)
+        protect_transfer(transaction)
         if Transaction.objects(gic_purchase=transaction.id).first():
             raise GraphQLError("Delete the linked GIC maturity before deleting its purchase.")
         validate_spinoffs(None, transaction)

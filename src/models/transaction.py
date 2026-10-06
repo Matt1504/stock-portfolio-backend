@@ -37,3 +37,6 @@ class Transaction(Document):
     principal_returned = DecimalField()
     interest_earned = DecimalField()
     interest_calculation = StringField(choices=("simple", "annual_compound"), default="simple")
+    transfer_batch = StringField()
+    transfer_pair = StringField()
+    transfer_counterparty = ReferenceField(Platform)

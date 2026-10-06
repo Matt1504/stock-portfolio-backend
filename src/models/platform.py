@@ -2,6 +2,8 @@ from mongoengine import Document
 from  mongoengine.fields import (
     ReferenceField,
     StringField,
+    DateField,
+    IntField,
     ObjectIdField
 )
 from models.account import Account
@@ -15,3 +17,7 @@ class Platform(Document):
     account = ReferenceField(Account)
     currency = ReferenceField(Currency)
     profile = ReferenceField(Profile, required=True)
+
+    closed_at = DateField()
+    # Serialize concurrent transfers even when the platform stays open.
+    transfer_revision = IntField(default=0)

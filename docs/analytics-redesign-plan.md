@@ -1,6 +1,14 @@
 # Analytics and transaction-history redesign
 
-Status: proposed analytics design, October 4, 2026. Initial measurement and reference batching are complete; persistent analytics implementation has not started. The small single-platform selection improvement is implemented separately in the frontend.
+Status: scheduled/persisted analytics deferred after the measured performance improvement; original design retained for reference. Updated October 5, 2026. Initial measurement and reference batching are complete; persistent analytics implementation has not started. The small single-platform selection improvement is implemented separately in the frontend.
+
+## Current direction: on-demand summaries
+
+Do not introduce scheduled jobs or analytics collections at current volumes. Keep transaction records authoritative, with batched reference reads. The dedicated transaction search now uses bounded MongoDB keyset pages, and the dashboard no longer displays recent transaction rows.
+
+A future deterministic Python calculator can serve `dashboardSummary(profileId)` and account/stock summary fields directly. Return totals, holding counts, realized results, contribution totals/limits, and book-cost distribution, separated by currency, with fetch metadata. Run the calculator on demand; optional cached summaries must invalidate with transaction/platform/stock/contribution-limit changes and support cold bypass. No scheduled rebuilding is needed.
+
+The dashboard then needs summary data only. Account and stock pages can request summary fields plus bounded history for charts/tables; those rows should not be used to infer all-time totals. Aggregate histories can later be returned as chart points if payloads warrant it. Preserve current calculations with fixture parity tests (partial sales, spinoffs, GICs, amount-only funds, fees, withholding, and currency handling) before migrating any cards. This UI phase retains the existing frontend financial formulas.
 
 ## Intended behavior
 

@@ -492,3 +492,17 @@ SEC Fee is an account-level expense available only for USD trading accounts. Ent
 ### Query performance diagnostics
 
 GraphQL transaction queries batch related MongoDB documents to avoid repeated per-transaction reference reads. This preserves existing profile filters, results, and cache/refresh behavior; no migration is needed. See [the measurement report](docs/transaction-fetching-performance.md) for before/after results and the read-only `scripts/benchmark_transaction_queries.py` command. Persistent analytics and bounded-history APIs are planned separately.
+
+### Explicit transaction search and fetch metadata
+
+`searchTransactions(profileId, account, platform, stock, activity, currency, startDate, endDate, first, after)` is an explicit search API. All filters are optional, intersect with profile ownership, and run in MongoDB. `first` defaults to 100 and is restricted to 1–100. The result contains `transactions` and `nextCursor`; pass the cursor as `after` to fetch the next batch. Pages use descending `(transaction_date, id)` keyset ordering and hydrate references only for the bounded batch. Missing/invalid profiles, invalid filters/cursors, and inverted date ranges return GraphQL errors. This avoids fetching the entire history to apply table filters. Search does not use Redis.
+
+Redis cache entries now have a versioned envelope containing `last_updated` and the encoded payload. Legacy entries reload automatically. Successful GraphQL HTTP responses include `extensions.dataFreshness { lastUpdated, cacheHit }`. The timestamp is conservative: it is the oldest source fetch time used by that response, including cached reference data. Cold bypass requests still refresh the existing cache. No MongoDB migration or scheduled worker is required.
+
+### Account transfers and platform closure
+
+`previewAccountTransfer(profileId, transFrom, transTo, transferDate, closeOriginalAccount)` calculates the remaining recorded assets and cash. `transferAccount` requires the same arguments and saves paired **Transfer Out / Transfer In** transactions, optionally setting the source platform’s nullable `closed_at` date. `closeOriginalAccount` defaults to true for compatibility; uncheck **Close Original Account** in the dialog to retain an open source platform. It preserves every historical transaction and requires open platforms in the same profile, account type and currency.
+
+Asset rows carry stock, shares (when applicable), and remaining book cost in `total`; cash rows have no stock. `transfer_batch`, `transfer_pair`, and `transfer_counterparty` identify the linked entries. Add/edit/bulk/import paths reject transaction dates after platform closure; linked transfer rows cannot be changed or deleted individually. Existing platforms need no migration: missing `closed_at` means open.
+
+Saving the pairs and closure uses a MongoDB transaction and requires Atlas or a replica set. There is deliberately no non-atomic fallback. Redis transaction snapshots are invalidated after success. Negative cash/holdings, undated source transactions, later source transactions when closing, unresolved amount-only fund sale costs, and outstanding GIC contracts block the transfer with an explicit error. When keeping the source open, balances are calculated through the transfer date; later transactions remain on the source, and a later sale without enough remaining shares blocks the transfer. GIC contract transfers remain unsupported because their maturity links must remain valid.

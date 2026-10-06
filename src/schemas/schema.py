@@ -63,7 +63,19 @@ class Mutations(ObjectType):
     create_contribution_limit = CreateContributionLimitMutation.Field()
     delete_contribution_limit = DeleteContributionLimitMutation.Field()
     create_account = CreateAccountMutation.Field()
+from schemas.transaction_search import TransactionSearchResult, search_transactions
+
+from schemas.account_transfer import AccountTransferPreview, preview as preview_account_transfer
+
 class Query(ObjectType):
+    preview_account_transfer = graphene.Field(AccountTransferPreview, profile_id=graphene.ID(required=True), trans_from=graphene.ID(required=True), trans_to=graphene.ID(required=True), transfer_date=graphene.Date(required=True), close_original_account=graphene.Boolean(default_value=True))
+    def resolve_preview_account_transfer(self, info, profile_id, trans_from, trans_to, transfer_date, close_original_account=True):
+        return preview_account_transfer(profile_id, trans_from, trans_to, transfer_date, close_original_account)
+
+    search_transactions = graphene.Field(TransactionSearchResult, profile_id=graphene.ID(required=True), account=graphene.ID(), platform=graphene.ID(), stock=graphene.ID(), activity=graphene.ID(), currency=graphene.ID(), start_date=graphene.Date(), end_date=graphene.Date(), first=graphene.Int(default_value=100), after=graphene.String())
+    def resolve_search_transactions(self, info, profile_id, **args):
+        return search_transactions(profile_id, **args)
+
     preview_statement_import = graphene.Field(StatementPreview, profile_id=graphene.ID(required=True), platform=graphene.ID(required=True), text=graphene.String(required=True))
     def resolve_preview_statement_import(self, info, profile_id, platform, text):
         return preview_statement(info, profile_id, platform, text)

@@ -258,12 +258,12 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(Transaction.objects.count(), 1)
 
     def test_transfer_cannot_cross_profiles(self):
-        self.execute('mutation { transferAccount(profileId: "' + str(self.alice.id) + '", transFrom: "' + str(self.pa.id) + '", transTo: "' + str(self.pb.id) + '") { success } }', errors=True)
+        self.execute('mutation { transferAccount(profileId: "' + str(self.alice.id) + '", transferDate: "2026-10-05", transFrom: "' + str(self.pa.id) + '", transTo: "' + str(self.pb.id) + '") { success } }', errors=True)
         self.assertEqual(self.ta.reload().platform.id, self.pa.id)
 
     def test_transfer_checks_account_and_currency(self):
         other = Platform(name="Other", account=Account(code="RRSP").save(), currency=self.currency, profile=self.alice).save()
-        self.execute('mutation { transferAccount(profileId: "' + str(self.alice.id) + '", transFrom: "' + str(self.pa.id) + '", transTo: "' + str(other.id) + '") { success } }', errors=True)
+        self.execute('mutation { transferAccount(profileId: "' + str(self.alice.id) + '", transferDate: "2026-10-05", transFrom: "' + str(self.pa.id) + '", transTo: "' + str(other.id) + '") { success } }', errors=True)
         self.assertEqual(self.ta.reload().platform.id, self.pa.id)
 
     def test_create_contribution_limit_assigns_profile(self):

@@ -1,3 +1,4 @@
+from graphql import GraphQLError
 import os
 import re
 import sys
@@ -152,6 +153,31 @@ class ReadCacheTests(unittest.TestCase):
 
         self.loader.side_effect = load_then_disconnect
         self.assertEqual(self.read()[0].code, "TFSA")
+
+
+class CacheTimestampTests(unittest.TestCase):
+    def setUp(self):
+        self.redis = fakeredis.FakeRedis(decode_responses=True)
+        self.cache = ReadCache(SETTINGS, self.redis)
+
+    def test_cache_hit_retains_fetch_timestamp_and_cold_refresh_replaces_it(self):
+        import json
+        from flask import Flask, g
+        application = Flask(__name__)
+        def load():
+            return self.cache.get_or_load('timestamp', {}, 60, lambda: [1], json.dumps, json.loads)
+        with application.test_request_context('/'):
+            self.assertEqual(load(), [1])
+            original = g.data_freshness[-1][0]
+        with application.test_request_context('/'):
+            self.assertEqual(load(), [1])
+            self.assertEqual(g.data_freshness[-1], (original, True))
+        with application.test_request_context('/'):
+            self.cache.get_or_load('timestamp', {}, 60, lambda: [2], json.dumps, json.loads, force_refresh=True)
+            self.assertNotEqual(g.data_freshness[-1][0], original)
+            self.assertFalse(g.data_freshness[-1][1])
+        envelope = json.loads(self.redis.get(self.cache._key('timestamp', {})))
+        self.assertIn('last_updated', envelope)
 
 
 class SettingsTests(unittest.TestCase):
@@ -331,26 +357,28 @@ class GraphQLCacheTests(unittest.TestCase):
         self.assertEqual(len(self.transactions_query(self.other_account)["transactionsByAccount"]), 1)
 
     def test_transfer_refreshes_cached_platform_details(self):
+        from test_account_transfer import FakeSession
+        for name in ("Transfer In", "Transfer Out", "Contribution"):
+            Activity(name=name).save()
+        Transaction(account=self.account, platform=self.platform,
+            activity=Activity.objects(name="Contribution").first(), total=100,
+            transaction_date=date(2025, 1, 1)).save()
         self.transactions_query()
-        result = self.execute("mutation($from: ID!, $to: ID!) { transferAccount(transFrom: $from, transTo: $to) { success } }", {"from": str(self.platform.id), "to": str(self.destination.id)})
+        with patch.object(mongomock.MongoClient, "start_session", return_value=FakeSession()):
+            result = self.execute("mutation($from: ID!, $to: ID!) { transferAccount(transFrom: $from, transTo: $to, transferDate: \"2025-01-02\") { success } }", {"from": str(self.platform.id), "to": str(self.destination.id)})
         self.assertTrue(result["transferAccount"]["success"])
-        self.assertEqual(self.transactions_query()["transactionsByAccount"][0]["platform"]["name"], "New Broker")
-
-    def test_partial_transfer_failure_also_invalidates(self):
-        second = Transaction(account=self.account, platform=self.platform, activity=self.activity, total=1).save()
-        self.transactions_query()
-        original_save = Transaction.save
-
-        def fail_second(document, *args, **kwargs):
-            if document.id == second.id:
-                raise RuntimeError("Transfer interrupted")
-            return original_save(document, *args, **kwargs)
-
-        with patch.object(Transaction, "save", fail_second):
-            result = self.execute("mutation($from: ID!, $to: ID!) { transferAccount(transFrom: $from, transTo: $to) { success } }", {"from": str(self.platform.id), "to": str(self.destination.id)})
-        self.assertFalse(result["transferAccount"]["success"])
         rows = self.transactions_query()["transactionsByAccount"]
-        self.assertEqual(next(row for row in rows if row["id"] == str(self.transaction.id))["platform"]["name"], "New Broker")
+        self.assertEqual(len(rows), 6)
+        self.assertEqual(next(row for row in rows if row["id"] == str(self.transaction.id))["platform"]["name"], "Broker")
+        self.assertEqual(self.platform.reload().closed_at, date(2025, 1, 2))
+
+    def test_failed_transfer_preserves_cached_history(self):
+        self.transactions_query()
+        with patch("schemas.mutations.transaction.commit_transfer", side_effect=GraphQLError("Transfer aborted")):
+            result = schema.execute('mutation($from: ID!, $to: ID!, $profile: ID!) { transferAccount(profileId: $profile, transFrom: $from, transTo: $to, transferDate: "2025-01-02") { success } }', variables={"profile": str(self.profile.id), "from": str(self.platform.id), "to": str(self.destination.id)})
+        self.assertTrue(result.errors)
+        self.assertEqual(self.transaction.reload().platform.id, self.platform.id)
+        self.assertIsNone(self.platform.reload().closed_at)
 
 
 if __name__ == "__main__":

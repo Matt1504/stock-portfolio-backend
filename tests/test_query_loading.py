@@ -51,6 +51,29 @@ class QueryLoadingTests(unittest.TestCase):
         self.assertFalse(result.errors, result.errors)
         return result.data
 
+    def test_search_pages_are_bounded_and_exhaust_equal_date_rows(self):
+        from schemas.transaction_search import search_transactions
+        first = search_transactions(str(self.profile.id), stock=str(self.stock.id), first=100)
+        self.assertEqual(len(first.transactions), 100)
+        self.assertTrue(first.next_cursor)
+        second = search_transactions(str(self.profile.id), stock=str(self.stock.id), after=first.next_cursor)
+        self.assertEqual(len(second.transactions), 20)
+        self.assertIsNone(second.next_cursor)
+        self.assertEqual(len({row.id for row in first.transactions + second.transactions}), 120)
+
+    def test_search_profile_filters_and_invalid_inputs(self):
+        from schemas.transaction_search import search_transactions
+        from graphql import GraphQLError
+        other = Profile(name='Other').save()
+        self.assertEqual(search_transactions(str(other.id)).transactions, [])
+        self.assertEqual(search_transactions(str(self.profile.id), start_date=date(2027, 1, 1)).transactions, [])
+        self.assertEqual(len(search_transactions(str(self.profile.id), account=str(self.account.id), platform=str(self.platform.id), currency=str(self.currency.id), activity=str(self.buy.id), stock=str(self.stock.id), first=10).transactions), 10)
+        with self.assertRaises(GraphQLError):
+            search_transactions(str(other.id), platform=str(self.platform.id))
+        for arguments in ({'first': 101}, {'after': 'bad'}, {'account': 'bad'}, {'start_date': date(2027, 1, 1), 'end_date': date(2026, 1, 1)}):
+            with self.assertRaises(GraphQLError):
+                search_transactions(str(self.profile.id), **arguments)
+
     def test_large_graphql_response_matches_lazy_loading_with_bounded_reads(self):
         with patch('schemas.schema.materialize_references', lambda queryset: queryset):
             expected = self.execute()

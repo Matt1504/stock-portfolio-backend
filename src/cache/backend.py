@@ -1,4 +1,6 @@
 import hashlib
+import json
+from datetime import datetime, timezone
 import logging
 import threading
 import uuid
@@ -18,6 +20,15 @@ except ImportError:
 
 
 logger = logging.getLogger(__name__)
+
+
+def record_freshness(timestamp, cached=False):
+    # Request-local metadata; concurrent requests cannot share timestamps.
+    from flask import g, has_request_context
+    if has_request_context():
+        entries = getattr(g, 'data_freshness', [])
+        entries.append((timestamp, cached))
+        g.data_freshness = entries
 
 
 class ReadCache:
@@ -91,18 +102,27 @@ class ReadCache:
         return "{}:{}:{}:{}".format(self.settings.prefix, namespace, generation, digest)
 
     def get_or_load(self, namespace, parameters, ttl, loader, encode, decode, force_refresh=False):
+        def load_fresh():
+            value = loader()
+            record_freshness(datetime.now(timezone.utc).isoformat(), False)
+            return value
         if not self.enabled:
-            return loader()
+            return load_fresh()
         try:
             key = self._key(namespace, parameters)
             payload = None if force_refresh else self.client.get(key)
         except RedisError:
             logger.warning("Redis read failed; using MongoDB")
-            return loader()
+            return load_fresh()
 
         if payload is not None:
             try:
-                value = decode(payload)
+                envelope = json.loads(payload)
+                if envelope.get('cache_version') != 1:
+                    raise ValueError('Legacy cache entry has no fetch timestamp')
+                timestamp = datetime.fromisoformat(envelope['last_updated']).isoformat()
+                value = decode(envelope['payload'])
+                record_freshness(timestamp, True)
                 logger.debug("Cache hit: %s", namespace)
                 return value
             except (ValueError, TypeError, KeyError, AttributeError):
@@ -110,8 +130,10 @@ class ReadCache:
 
         logger.debug("Cache miss: %s", namespace)
         value = loader()
+        timestamp = datetime.now(timezone.utc).isoformat()
+        record_freshness(timestamp, False)
         try:
-            payload = encode(value)
+            payload = json.dumps({'cache_version': 1, 'last_updated': timestamp, 'payload': encode(value)})
         except (ValueError, TypeError, KeyError, AttributeError):
             logger.warning("Could not serialize %s; returning MongoDB data without caching", namespace)
             return value
