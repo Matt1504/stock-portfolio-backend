@@ -4,7 +4,7 @@ from decimal import Decimal, ROUND_HALF_UP
 from uuid import uuid4
 from bson import ObjectId
 from graphql import GraphQLError
-from graphene import ObjectType, String, Decimal as GDecimal, List, Field
+from graphene import ObjectType, InputObjectType, ID, String, Decimal as GDecimal, List, Field
 from models.models import Transaction, Platform, Activity
 from query_loading import materialize_references
 from schemas.profiles import owned_platform
@@ -25,6 +25,26 @@ class TransferAsset(ObjectType):
     ticker = String()
     shares = GDecimal(required=True)
     book_cost = GDecimal(required=True)
+
+class TransferAssetValueInput(InputObjectType):
+    stock_id = ID(required=True)
+    market_value = GDecimal(required=True)
+
+
+def asset_values(assets, values):
+    expected = {str(p['stock'].id) for p in assets}
+    result = {}
+    for item in values or []:
+        stock_id = str(item['stock_id'])
+        if stock_id not in expected or stock_id in result:
+            fail('Provide one market value for each asset in the current transfer preview.')
+        value = amount(item['market_value'])
+        if value < 0:
+            fail('Transfer market values cannot be negative.')
+        result[stock_id] = money(value)
+    if set(result) != expected:
+        fail('Enter the total market value in the account currency for every transferred asset.')
+    return result
 
 class AccountTransferPreview(ObjectType):
     cash = GDecimal(required=True)
@@ -133,12 +153,14 @@ def preview(profile_id, source_id, destination_id, transfer_date, close_original
     return AccountTransferPreview(cash=cash, currency=source.currency.code, assets=[TransferAsset(stock_id=str(p['stock'].id), ticker=p['stock'].ticker, shares=p['shares'], book_cost=money(p['cost'])) for p in assets])
 
 
-def commit_transfer(profile_id, source_id, destination_id, transfer_date, close_original_account=True):
+def commit_transfer(profile_id, source_id, destination_id, transfer_date, close_original_account=True, market_values=None):
     """Replica-set transaction: all pairs and closure commit together or none do."""
-    prepare(profile_id, source_id, destination_id, transfer_date, close_original_account=close_original_account)
+    _, _, _, assets = prepare(profile_id, source_id, destination_id, transfer_date, close_original_account=close_original_account)
+    asset_values(assets, market_values)
     client = Platform._get_db().client
     def write(session):
         source, destination, cash, assets = prepare(profile_id, source_id, destination_id, transfer_date, session, close_original_account)
+        values = asset_values(assets, market_values)
         activities = {a.name: a for a in Activity.objects(name__in=['Transfer In', 'Transfer Out'])}
         if len(activities) != 2:
             fail('Run the setup script to create Transfer In and Transfer Out activities.')
@@ -154,6 +176,9 @@ def commit_transfer(profile_id, source_id, destination_id, transfer_date, close_
                     total=total, activity=activities[activity], transaction_date=transfer_date,
                     total_currency=platform.currency, price_currency=platform.currency, exchange_rate=1,
                     transfer_batch=batch, transfer_pair=pair, transfer_counterparty=counterparty)
+                if stock:
+                    row.transfer_market_value = values[str(stock.id)]
+                    row.transfer_market_value_source = 'manual'
                 row.validate()
                 documents.append(row.to_mongo())
         if not close_original_account:

@@ -27,7 +27,7 @@ from schemas.transaction_currency import validate_currency, number
 from mongoengine import NotUniqueError, ValidationError, DoesNotExist
 from schemas.transaction_validation import TransactionWarning, validate_ownership, contribution_warnings
 
-from schemas.account_transfer import commit_transfer, protect_transfer, validate_closed_platform
+from schemas.account_transfer import commit_transfer, protect_transfer, validate_closed_platform, TransferAssetValueInput
 
 def validate_sec_fee(transaction):
     if not transaction.activity or transaction.activity.name != "SEC Fee":
@@ -221,10 +221,11 @@ class TransferTransactionMutation(Mutation):
         profile_id = ID(required=True)
         transfer_date = Date(required=True)
         close_original_account = Boolean(default_value=True)
+        market_values = List(NonNull(TransferAssetValueInput))
 
     success = Boolean(required=True)
-    def mutate(self, info, trans_from, trans_to, profile_id, transfer_date, close_original_account=True):
-        commit_transfer(profile_id, trans_from, trans_to, transfer_date, close_original_account)
+    def mutate(self, info, trans_from, trans_to, profile_id, transfer_date, close_original_account=True, market_values=None):
+        commit_transfer(profile_id, trans_from, trans_to, transfer_date, close_original_account, market_values)
         invalidate_transactions()
         return TransferTransactionMutation(success=True)
 

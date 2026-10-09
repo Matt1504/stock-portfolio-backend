@@ -501,8 +501,127 @@ Redis cache entries now have a versioned envelope containing `last_updated` and 
 
 ### Account transfers and platform closure
 
-`previewAccountTransfer(profileId, transFrom, transTo, transferDate, closeOriginalAccount)` calculates the remaining recorded assets and cash. `transferAccount` requires the same arguments and saves paired **Transfer Out / Transfer In** transactions, optionally setting the source platform’s nullable `closed_at` date. `closeOriginalAccount` defaults to true for compatibility; uncheck **Close Original Account** in the dialog to retain an open source platform. It preserves every historical transaction and requires open platforms in the same profile, account type and currency.
+`previewAccountTransfer(profileId, transFrom, transTo, transferDate, closeOriginalAccount)` calculates the remaining recorded assets and cash. `transferAccount` also requires `marketValues: [{stockId, marketValue}]` for every asset in the preview (total market value in the account currency, including amount-only funds), and saves paired **Transfer Out / Transfer In** transactions, optionally setting the source platform’s nullable `closed_at` date. `closeOriginalAccount` defaults to true for compatibility; uncheck **Close Original Account** in the dialog to retain an open source platform. It preserves every historical transaction and requires open platforms in the same profile, account type and currency.
 
-Asset rows carry stock, shares (when applicable), and remaining book cost in `total`; cash rows have no stock. `transfer_batch`, `transfer_pair`, and `transfer_counterparty` identify the linked entries. Add/edit/bulk/import paths reject transaction dates after platform closure; linked transfer rows cannot be changed or deleted individually. Existing platforms need no migration: missing `closed_at` means open.
+Asset rows carry stock, shares (when applicable), and remaining book cost in `total`; cash rows have no stock. `transfer_market_value` separately stores the asset value moved on the transfer date, identically on both legs. It does not change cash, book cost, realized gain or unrealized gain. Future transfers require a manually entered value (`transfer_market_value_source=manual`). Legacy values may be backfilled with unadjusted daily closing prices × shares (`yahoo_close`), retaining `transfer_market_price` for provenance; these are estimates, not broker execution prices. Existing documents may omit these nullable fields. `transfer_batch`, `transfer_pair`, and `transfer_counterparty` identify the linked entries. Add/edit/bulk/import paths reject transaction dates after platform closure; linked transfer rows cannot be changed or deleted individually. Existing platforms need no migration: missing `closed_at` means open.
 
 Saving the pairs and closure uses a MongoDB transaction and requires Atlas or a replica set. There is deliberately no non-atomic fallback. Redis transaction snapshots are invalidated after success. Negative cash/holdings, undated source transactions, later source transactions when closing, unresolved amount-only fund sale costs, and outstanding GIC contracts block the transfer with an explicit error. When keeping the source open, balances are calculated through the transfer date; later transactions remain on the source, and a later sale without enough remaining shares blocks the transfer. GIC contract transfers remain unsupported because their maturity links must remain valid.
+
+## Hourly market-price worker
+
+Market-price fetching runs separately from Flask in the `market-data` Docker target,
+using this repository's MongoDB models. The stack repository includes it as a Compose
+service; there is no new repository. The worker reads MongoDB and writes only Redis.
+
+- Runs immediately on startup, then every 3,600 seconds (configurable with
+  `MARKET_DATA_INTERVAL_SECONDS`, minimum 3,600).
+- Counts current shares per platform through today, including buys, sells, splits,
+  spinoffs and asset transfers; fetches one quote per stock held in any profile/platform.
+- Only share-based assets (`Stock`) with CAD/USD currency are supported initially.
+  Amount-only Index/Mutual Funds and GICs are excluded. Share-based ETFs recorded as
+  `Stock` are supported. A newly purchased stock becomes eligible next cycle.
+- Uses XTSE/XNYS exchange calendars for regular trading sessions, holidays, daylight
+  saving changes and early closes. During closed sessions it fills missing quotes and
+  captures the latest completed session's close. It does not fetch extended-hours prices.
+- Quotes have no short expiry: preserve the last successful observation over holidays
+  and provider outages. Redis eviction/restart is recovered on the next worker cycle.
+- After successfully reading the ledger, each cycle removes cached quotes for stocks
+  no longer held in any profile/platform. A final sale removes its quote next cycle
+  (within about an hour while the worker runs); selling in just one platform does not
+  remove a quote needed elsewhere. MongoDB read failures skip cleanup entirely.
+- Yahoo Finance through `yfinance` is unofficial, intended for personal use, and can be
+  rate-limited or unavailable. Quotes are reference data, not a guaranteed live feed.
+
+For a non-Docker launch (Python 3.11+):
+
+```sh
+pip install -r requirements-market-data.txt
+# Configure MONGODB_URI, MONGODB_DATABASE and REDIS_URL like the backend.
+PYTHONPATH=src python -m market_data.worker
+PYTHONPATH=src python -m market_data.worker --once
+```
+
+Default provider symbols are `<ticker>.TO` for CAD and `<ticker>` for USD. Optional
+`market_symbol` and `market_exchange` stock fields override these mappings (GraphQL
+`StockInput.marketSymbol` / `marketExchange`, exchange `XTSE` or `XNYS`). Confirm the
+provider symbol for non-TSX listings and dual listings; the worker checks quote currency
+against the stock before caching. No migration is required for existing stocks.
+
+GraphQL can read quotes on stock nodes without invoking Yahoo:
+
+```graphql
+{
+  stocks {
+    edges {
+      node {
+        id ticker
+        marketQuote {
+          price currency symbol exchange source priceKind
+          quoteTime lastUpdated ageSeconds refreshOverdue
+        }
+      }
+    }
+  }
+}
+```
+
+`marketQuote` is null for missing/unsupported quotes. `quoteTime` is the observation
+(or completed session close); `lastUpdated` is the worker fetch time. `refreshOverdue`
+means the last fetch was over two hours ago, not that a weekend closing quote is invalid.
+Consumers should consider price kind, quote age and the exchange session before labeling
+prices stale. Quote keys are `<cache-prefix>:market-quotes:v1:<stock-id>`, independent of
+transaction-cache generations. Changing the stock mapping hides its old cached quote.
+
+Market value is current shares × price; unrealized gain/loss is market value minus
+remaining book cost (which already includes applicable historical trading fees).
+Account value is market value plus cash, not unrealized gains plus cash. Live prices
+must never change realized gain/loss or recorded book cost. Convert market value using
+current FX for mixed-currency accounts; never sum CAD and USD directly. This worker
+provides quotes; market-value UI and FX integration are separate from existing stats.
+
+### Market valuation in GraphQL and React
+
+`marketValuation(profileId: ID!, currency: String!, platform: ID, stock: ID, account: ID)`
+calculates current holdings and recorded cash on the backend, using only Redis quotes.
+All positions use their platform's recorded currency; dashboard CAD/USD tabs remain
+separate. `stock` selects that stock's positions within the selected currency platforms.
+Future-dated transactions are excluded. Profile and platform ownership are enforced.
+
+The worker also caches one USD/CAD rate from Yahoo (`CAD=X`) and reads its reciprocal
+for CAD/USD conversion. Current FX affects market value only; historical settlement
+totals, book cost, and realized gains remain unchanged. FX lives at
+`<cache-prefix>:market-fx:v1:USD:CAD`. Page refresh reads cached prices/rates and never
+contacts Yahoo. The worker refreshes FX hourly during regular equity sessions and once
+after the latest completed session, preserving the last successful rate on errors.
+
+The React dashboard, account and share-based stock pages display a separate Market
+Valuation section: account value (or native current stock price), market value,
+unrealized gain/loss and unrealized return. Prices and fetch times are shown below it.
+Existing recorded/realized statistics are unchanged. Open GICs and amount-only funds
+are unpriced; incomplete valuations show dashes, a warning, and affected tickers rather
+than presenting a partial sum as the complete portfolio value. `pricedMarketValue`
+exposes only the available priced portion for future use; `marketValue`, `totalValue`
+and unrealized metrics are null until the selected holdings can all be valued.
+
+Example:
+
+```graphql
+query($profile: ID!, $platform: ID!) {
+  marketValuation(profileId: $profile, platform: $platform, currency: "CAD") {
+    currency complete marketValue bookCost cashBalance totalValue
+    unrealizedGain unrealizedReturn quoteTime lastUpdated missingTickers warnings
+  }
+}
+```
+
+### Historical transfer market-value backfill
+
+`scripts/backfill_transfer_market_values.py` runs with the market-data dependencies and configured MongoDB/Redis environment. `preview --profile ID --plan /private/plan.json` fetches exact-date Yahoo Finance daily **Close** (`auto_adjust=False`), validates linked pairs, and writes a private before-image backup and proposed values. `apply` with the same arguments rechecks the unchanged ledger and writes all pairs atomically, with a migration journal and cache invalidation. It never changes cash, basis, shares or dates. Missing trading-day prices, unsupported funds, foreign-currency assets and incomplete pairs require manual review. Keep plans outside Git. Yahoo’s historical Close can be split-adjusted; review later splits before applying to older transfer quantities. These transfer values are used for boundary transfers in the annualized-return calculation described below.
+
+### Annualized return
+
+`marketValuation` also returns `annualizedReturn` (percentage), `annualizedStartDate` (first recorded investment cash flow), and `annualizedReturnNote`. The backend calculates money-weighted XIRR with actual dates on a 365-day basis, following [Microsoft’s XIRR definition](https://support.microsoft.com/en-us/excel/functions/xirr-function). It does not divide unrealized return by account age. Account/portfolio scopes use contributions, withdrawals and transfers across the scope boundary, plus current holdings and cash as the ending value. Retained dividends, interest, sales and fees affect the ending value and are not counted again as external cash flows. Matched internal transfer pairs cancel; boundary asset transfers use `transfer_market_value`, and historical Yahoo-close estimates are disclosed in the note. CAD and USD remain separate scopes.
+
+Stock scopes use dated buy totals, sale proceeds, stock-linked income/tax and boundary transfers, with current holdings as the ending value. Fees already in trade totals are not subtracted twice, and account-only fees are not attributed to a stock. Splits produce no cash flow. Stock-level spinoffs need an actual spinoff-date market value; cost allocations alone cannot establish that return, so affected stock returns remain null with an explanatory note. Account/portfolio spinoffs are internal movements.
+
+Missing valuations, missing transfer values, insufficient dated cash flows, negative ending values, or no single stable bracketed solution return null (rendered as a dash). The bounded solver scans log(1+rate) from -20 to 20, bisects brackets, verifies the residual and rejects detected multiple roots; it does not claim an answer outside that numerical range. No market-provider requests or database writes occur in this calculator. Results use the complete scoped ledger through today in America/Toronto and the existing cached market valuation.

@@ -53,7 +53,9 @@ class AccountTransferTests(unittest.TestCase):
         return Transaction(platform=self.source, account=self.account, activity=self.activities[activity], transaction_date=self.day, total=total, **kwargs).save()
     def transfer(self, close_original_account=True):
         with patch.object(mongomock.MongoClient, 'start_session', return_value=FakeSession()):
-            return commit_transfer(str(self.profile.id), str(self.source.id), str(self.target.id), self.day, close_original_account)
+            assets = preview(str(self.profile.id), str(self.source.id), str(self.target.id), self.day, close_original_account).assets
+            values = [{'stock_id': p.stock_id, 'market_value': Decimal('500')} for p in assets]
+            return commit_transfer(str(self.profile.id), str(self.source.id), str(self.target.id), self.day, close_original_account, values)
     def test_keep_open_uses_dated_balances_and_retains_later_income(self):
         later = self.row('Dividends', Decimal('0.58'), stock=self.stock)
         later.update(set__transaction_date=self.day + timedelta(days=14))
@@ -87,7 +89,7 @@ class AccountTransferTests(unittest.TestCase):
         self.assertFalse(result.errors, result.errors)
         self.assertEqual(result.data['previewAccountTransfer']['cash'], '753.00')
         with patch.object(mongomock.MongoClient, 'start_session', return_value=FakeSession()):
-            result = schema.execute('mutation' + signature + '{transferAccount(' + args + '){success}}', variables=variables)
+            result = schema.execute('mutation' + signature + '{transferAccount(' + args + ', marketValues: [{stockId: "' + str(self.stock.id) + '", marketValue: "500"}]){success}}', variables=variables)
         self.assertFalse(result.errors, result.errors)
         self.assertIsNone(self.source.reload().closed_at)
 
@@ -117,7 +119,7 @@ class AccountTransferTests(unittest.TestCase):
         result = schema.execute(query, variables=variables)
         self.assertFalse(result.errors, result.errors)
         self.assertEqual(result.data['previewAccountTransfer']['cash'], '753.00')
-        mutation = 'mutation($profile: ID!, $source: ID!, $target: ID!, $day: Date!) { transferAccount(profileId: $profile, transFrom: $source, transTo: $target, transferDate: $day) { success } }'
+        mutation = 'mutation($profile: ID!, $source: ID!, $target: ID!, $day: Date!) { transferAccount(profileId: $profile, transFrom: $source, transTo: $target, transferDate: $day, marketValues: [{stockId: "' + str(self.stock.id) + '", marketValue: "500"}]) { success } }'
         with patch.object(mongomock.MongoClient, 'start_session', return_value=FakeSession()):
             result = schema.execute(mutation, variables=variables)
         self.assertFalse(result.errors, result.errors)
@@ -140,7 +142,7 @@ class AccountTransferTests(unittest.TestCase):
         self.assertEqual(self.buy.reload().platform.id, self.source.id)
     def test_unsupported_database_fails_without_writing(self):
         count = Transaction.objects.count()
-        with self.assertRaises(GraphQLError): commit_transfer(str(self.profile.id), str(self.source.id), str(self.target.id), self.day)
+        with self.assertRaises(GraphQLError): commit_transfer(str(self.profile.id), str(self.source.id), str(self.target.id), self.day, market_values=[{'stock_id': str(self.stock.id), 'market_value': 500}])
         self.assertEqual(Transaction.objects.count(), count)
         self.assertIsNone(self.source.reload().closed_at)
     def test_closed_date_guard_and_linked_rows_are_protected(self):
@@ -180,5 +182,21 @@ class AccountTransferTests(unittest.TestCase):
         buy.delete()
         self.row('Service Fee', 1000)
         with self.assertRaisesRegex(GraphQLError, 'negative'): self.transfer()
+
+    def test_requires_exact_finite_asset_values_and_stores_both_legs(self):
+        for values in (None, [], [{'stock_id': str(self.stock.id), 'market_value': -1}],
+                       [{'stock_id': str(self.stock.id), 'market_value': 'NaN'}],
+                       [{'stock_id': str(self.stock.id), 'market_value': 500}] * 2):
+            with self.assertRaises(GraphQLError):
+                commit_transfer(str(self.profile.id), str(self.source.id), str(self.target.id), self.day, market_values=values)
+        self.transfer()
+        assets = Transaction.objects(transfer_batch__ne=None, stock=self.stock)
+        self.assertEqual(assets.count(), 2)
+        for row in assets:
+            self.assertEqual(row.transfer_market_value, Decimal('500'))
+            self.assertEqual(row.transfer_market_value_source, 'manual')
+            self.assertEqual(row.total, Decimal('300'))
+        for row in Transaction.objects(transfer_batch__ne=None, stock=None):
+            self.assertIsNone(row.transfer_market_value)
 
 if __name__ == '__main__': unittest.main()

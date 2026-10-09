@@ -365,7 +365,7 @@ class GraphQLCacheTests(unittest.TestCase):
             transaction_date=date(2025, 1, 1)).save()
         self.transactions_query()
         with patch.object(mongomock.MongoClient, "start_session", return_value=FakeSession()):
-            result = self.execute("mutation($from: ID!, $to: ID!) { transferAccount(transFrom: $from, transTo: $to, transferDate: \"2025-01-02\") { success } }", {"from": str(self.platform.id), "to": str(self.destination.id)})
+            result = self.execute("mutation($from: ID!, $to: ID!, $values: [TransferAssetValueInput!]) { transferAccount(transFrom: $from, transTo: $to, transferDate: \"2025-01-02\", marketValues: $values) { success } }", {"from": str(self.platform.id), "to": str(self.destination.id), "values": [{"stockId": str(self.stock.id), "marketValue": "30"}]})
         self.assertTrue(result["transferAccount"]["success"])
         rows = self.transactions_query()["transactionsByAccount"]
         self.assertEqual(len(rows), 6)

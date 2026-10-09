@@ -29,6 +29,8 @@ class StockInput(InputObjectType):
     ticker = String()
     currency = ID()
     asset_id = ID()
+    market_symbol = String()
+    market_exchange = String()
 
 class CreateStockMutation(Mutation):
     stock = Field(StockType)
@@ -43,7 +45,9 @@ class CreateStockMutation(Mutation):
             name=stock_data.name,
             ticker=stock_data.ticker,
             currency=stock_data.currency,
-            asset=stock_asset(stock_data.asset_id)
+            asset=stock_asset(stock_data.asset_id),
+            market_symbol=stock_data.market_symbol,
+            market_exchange=stock_data.market_exchange,
         ) 
         stock.save()
         invalidate_transactions()
@@ -67,6 +71,9 @@ class UpdateStockMutation(Mutation):
 
         if stock_data.asset_id:
             stock.asset = stock_asset(stock_data.asset_id)
+        for field in ('market_symbol', 'market_exchange'):
+            if field in stock_data:
+                setattr(stock, field, stock_data[field] or None)
         stock.save()
         invalidate_transactions()
     

@@ -40,3 +40,8 @@ class Transaction(Document):
     transfer_batch = StringField()
     transfer_pair = StringField()
     transfer_counterparty = ReferenceField(Platform)
+    # Account-currency value of the asset when transferred; never cost basis
+    # or a cash movement. Nullable for legacy records pending reconciliation.
+    transfer_market_value = DecimalField(min_value=0)
+    transfer_market_value_source = StringField(choices=("manual", "yahoo_close"))
+    transfer_market_price = DecimalField(precision=8, min_value=0)

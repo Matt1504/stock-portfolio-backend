@@ -66,8 +66,14 @@ class Mutations(ObjectType):
 from schemas.transaction_search import TransactionSearchResult, search_transactions
 
 from schemas.account_transfer import AccountTransferPreview, preview as preview_account_transfer
+from schemas.market_valuation import MarketValuation, market_valuation
 
 class Query(ObjectType):
+    market_valuation = graphene.Field(MarketValuation, profile_id=graphene.ID(required=True), currency=graphene.String(required=True), platform=graphene.ID(), stock=graphene.ID(), account=graphene.ID())
+
+    def resolve_market_valuation(self, info, profile_id, currency, **args):
+        return market_valuation(profile_id, currency, **args)
+
     preview_account_transfer = graphene.Field(AccountTransferPreview, profile_id=graphene.ID(required=True), trans_from=graphene.ID(required=True), trans_to=graphene.ID(required=True), transfer_date=graphene.Date(required=True), close_original_account=graphene.Boolean(default_value=True))
     def resolve_preview_account_transfer(self, info, profile_id, trans_from, trans_to, transfer_date, close_original_account=True):
         return preview_account_transfer(profile_id, trans_from, trans_to, transfer_date, close_original_account)

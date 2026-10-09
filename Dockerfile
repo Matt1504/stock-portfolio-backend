@@ -16,4 +16,16 @@ RUN pip install --no-cache-dir -r requirements-dev.txt
 COPY tests/ ./tests/
 CMD ["python", "-m", "unittest", "discover", "-s", "tests"]
 
+FROM runtime AS market-data
+COPY requirements-market-data.txt ./
+RUN pip install --no-cache-dir -r requirements-market-data.txt
+HEALTHCHECK NONE
+CMD ["python", "-m", "market_data.worker"]
+
+FROM market-data AS market-data-test
+COPY requirements-dev.txt ./
+RUN pip install --no-cache-dir -r requirements-dev.txt
+COPY tests/ ./tests/
+CMD ["python", "-m", "unittest", "discover", "-s", "tests", "-p", "test_market_data*.py"]
+
 FROM runtime AS production

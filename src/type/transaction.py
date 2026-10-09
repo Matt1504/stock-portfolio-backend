@@ -13,6 +13,7 @@ class TransactionType(MongoengineObjectType):
     price_currency = Field(CurrencyType)
     total_currency = Field(CurrencyType)
     exchange_rate = Float()
+    transfer_market_value = Float()
 
     def resolve_price_currency(self, info):
         # Historical prices were entered in the platform's currency.
