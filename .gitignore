@@ -4,3 +4,8 @@ passwords.py
 .env
 __pycache__/
 *.pyc
+
+# Private statements, investigation exports and local environment files
+tmp/
+.env.*
+!.env.example

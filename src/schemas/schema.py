@@ -1,5 +1,4 @@
 import graphene 
-from mongoengine import Q
 from datetime import datetime, timedelta
 from graphene_mongo import MongoengineConnectionField
 from graphene import ObjectType
@@ -41,7 +40,7 @@ from schemas.mutations.account import (
 from models.models import Transaction, ContributionLimit
 from schemas.profiles import ProfileConnectionField, personal_records, owned_platform
 from schemas.mutations.profile import CreateProfileMutation
-from cache.queries import CachedAccountsField, transactions_by_account, bypass_cache
+from cache.queries import CachedAccountsField
 from query_loading import materialize_references
 from schemas.queries.connections import MaterializedConnectionField
 
@@ -68,7 +67,18 @@ from schemas.transaction_search import TransactionSearchResult, search_transacti
 from schemas.account_transfer import AccountTransferPreview, preview as preview_account_transfer
 from schemas.market_valuation import MarketValuation, market_valuation
 
+from schemas.financial_analytics import FinancialAnalytics, financial_analytics, ContributionAnalytics, contribution_analytics, scoped_records
+
 class Query(ObjectType):
+    financial_analytics = graphene.List(FinancialAnalytics, profile_id=graphene.ID(required=True), platform=graphene.ID(), stock=graphene.ID(), account=graphene.ID())
+    contribution_analytics = graphene.List(ContributionAnalytics, profile_id=graphene.ID(required=True))
+
+    def resolve_financial_analytics(self, info, profile_id, **args):
+        return financial_analytics(info, profile_id, **args)
+
+    def resolve_contribution_analytics(self, info, profile_id):
+        return contribution_analytics(profile_id)
+
     market_valuation = graphene.Field(MarketValuation, profile_id=graphene.ID(required=True), currency=graphene.String(required=True), platform=graphene.ID(), stock=graphene.ID(), account=graphene.ID())
 
     def resolve_market_valuation(self, info, profile_id, currency, **args):
@@ -105,16 +115,15 @@ class Query(ObjectType):
     # TODO: Move these to its own file similar to mutation
     transactions_by_stock = graphene.List(TransactionType, profile_id=graphene.ID(required=True), stock=graphene.ID(required=True))
     def resolve_transactions_by_stock(self, info, profile_id, stock):
-        return materialize_references(personal_records(Transaction, profile_id).filter(Q(stock=stock) | Q(spinoff_source=stock)))
+        return scoped_records(info, profile_id, stock=stock)
     
     transactions_by_account = graphene.List(TransactionType, profile_id=graphene.ID(required=True), account=graphene.ID(required=True))
     def resolve_transactions_by_account(self, info, profile_id, account):
-        return transactions_by_account(account, profile_id, force_refresh=bypass_cache(info))
+        return scoped_records(info, profile_id, account=account)
     
     transactions_by_platform = graphene.List(TransactionType, profile_id=graphene.ID(required=True), platform=graphene.ID(required=True))
     def resolve_transactions_by_platform(self, info, profile_id, platform):
-        owned_platform(profile_id, platform)
-        return materialize_references(personal_records(Transaction, profile_id).filter(platform=platform))
+        return scoped_records(info, profile_id, platform=platform)
     
     transactions_by_activity = graphene.List(TransactionType, profile_id=graphene.ID(required=True), activity=graphene.ID(required=True))
     def resolve_transactions_by_activity(self, info, profile_id, activity):

@@ -1,6 +1,6 @@
 """Current valuation from the dated ledger and cached quotes (no provider calls)."""
 from datetime import date, datetime, timezone
-from decimal import Decimal, ROUND_HALF_UP
+from decimal import Decimal
 from zoneinfo import ZoneInfo
 
 import graphene
@@ -10,19 +10,10 @@ from query_loading import materialize_references
 from schemas.profiles import personal_records, owned_platform
 from market_data.quotes import read_quote, read_fx
 from schemas.annualized_return import calculate_annualized_return
+from schemas.analytics_ledger import amount, money, ledger
 
 ZERO = Decimal(0)
 
-
-def amount(value):
-    value = Decimal(str(value or 0))
-    if not value.is_finite():
-        raise GraphQLError('Correct non-finite transaction values before valuing the portfolio.')
-    return value
-
-
-def money(value):
-    return value.quantize(Decimal('.01'), rounding=ROUND_HALF_UP) if value is not None else None
 
 
 class MarketValuation(graphene.ObjectType):
@@ -48,60 +39,13 @@ class MarketValuation(graphene.ObjectType):
 
 
 def positions_and_cash(records, stock_id=None):
-    positions, cash, warnings = {}, ZERO, set()
-    for row in sorted(records, key=lambda r: (r.transaction_date or date.min, str(r.id))):
-        name = row.activity.name if row.activity else ''
-        total, shares = amount(row.total), amount(row.shares)
-        stock = row.stock
-        relevant = not stock_id or (stock and str(stock.id) == str(stock_id)) or (row.spinoff_source and str(row.spinoff_source.id) == str(stock_id))
-        def warn(message):
-            if relevant: warnings.add(message)
-        if row.total_currency and row.total_currency.code != row.platform.currency.code:
-            warn('Some recorded totals use a different currency from their platform; reconcile these transactions.')
-        if name in ('Contribution', 'Sell', 'Dividends', 'Interest', 'ETF Rebate', 'GIC Maturity'):
-            cash += total
-        elif name in ('Buy', 'Withdrawal', 'Withholding Tax', 'Service Fee', 'SEC Fee'):
-            cash -= total
-        elif name in ('Transfer In', 'Transfer Out') and not stock and not shares:
-            cash += total if name == 'Transfer In' else -total
-        if not stock:
-            continue
-        asset = stock.asset.name if stock.asset else 'Stock'
-        if asset == 'GIC' and name in ('Buy', 'GIC Maturity'):
-            cash -= amount(row.fee)
-        key = (row.platform.id, stock.id)
-        p = positions.setdefault(key, dict(stock=stock, shares=ZERO, cost=ZERO))
-        if asset == 'GIC':
-            if name == 'Buy': p['cost'] += total
-            elif name == 'GIC Maturity': p['cost'] = max(ZERO, p['cost'] - amount(row.principal_returned))
-            continue
-        if name == 'Stock Spinoff':
-            allocation = amount(row.allocated_book_cost)
-            p['shares'] += shares
-            p['cost'] += allocation
-            source = positions.get((row.platform.id, row.spinoff_source.id)) if row.spinoff_source else None
-            if source:
-                if allocation > source['cost']:
-                    warn('Spinoff allocation exceeds the original holding cost.')
-                source['cost'] = max(ZERO, source['cost'] - allocation)
-        elif name in ('Buy', 'Transfer In'):
-            p['shares'] += shares
-            p['cost'] += total if row.total is not None else amount(row.price) * shares + amount(row.fee)
-        elif name == 'Stock Split':
-            p['shares'] += shares
-        elif name in ('Sell', 'Transfer Out'):
-            if shares:
-                if shares > p['shares']:
-                    warn('Some disposals exceed recorded share holdings.')
-                if p['shares'] > 0:
-                    p['cost'] -= p['cost'] * min(shares, p['shares']) / p['shares']
-                p['shares'] -= shares
-                if p['shares'] <= 0: p['cost'] = ZERO
-            elif name == 'Transfer Out':
-                p['cost'] = max(ZERO, p['cost'] - total)
-            else:
-                warn('Amount-only fund sales have no recorded disposal cost.')
-    return list(positions.values()), cash, warnings
+    result = ledger(records, stock_id)
+    warnings = set(result['issues'])
+    for row in records:
+        relevant = not stock_id or (row.stock and str(row.stock.id) == str(stock_id)) or (row.spinoff_source and str(row.spinoff_source.id) == str(stock_id))
+        if relevant and row.total_currency and row.total_currency.code != row.platform.currency.code:
+            warnings.add('Some recorded totals use a different currency from their platform; reconcile these transactions.')
+    return result['positions'], result['cash'], warnings
 
 
 def calculate_valuation(records, currency, stock_id=None, quote_reader=read_quote, fx_reader=read_fx, valuation_date=None):

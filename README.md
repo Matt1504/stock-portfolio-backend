@@ -2,7 +2,7 @@
 
 ## Docker stack
 
-The sibling `stock-portfolio-stack` project runs the frontend, this API and Redis together. The backend image uses Python 3.11 and Gunicorn; Graphene 2.1.9 / graphql-core 2.3.2 retain the existing GraphQL API while supporting the container runtime. The `/health` endpoint performs a read-only MongoDB ping. The stack's development configuration runs Flask with source hot reload.
+The [stock-portfolio-stack repository](https://github.com/Matt1504/stock-portfolio-stack) runs the frontend, this API, Redis and the hourly market-data worker together. The backend image uses Python 3.11 and Gunicorn; Graphene 2.1.9 / graphql-core 2.3.2 retain the existing GraphQL API while supporting the container runtime. The `/health` endpoint performs a read-only MongoDB ping. The stack's development configuration runs Flask with source hot reload.
 
 Set `MONGODB_URI` and optionally `MONGODB_DATABASE` (default `stock_portfolio`) through the environment. Local launches still support `src/database/passwords.py` when no URI is provided, but that file is excluded from images. The Docker context also excludes `.env`, the local virtual environment, and investigation PDFs under `tmp`. No database setup or migrations run on container startup.
 
@@ -14,20 +14,20 @@ docker run --rm stock-portfolio-backend-tests
 ```
 
 ## Overview
-This project is the code that runs the backend server for our Stock Portfolio application. It connects to a MongoDB database that stores our data. API requests are using GraphQL and handled with Graphene-Python. The web server application is hosted using Flask. 
+This project is the code that runs the backend server for our Stock Portfolio application. It connects to a MongoDB database that stores our data. API requests are using GraphQL and handled with Graphene-Python. The web server application is hosted using Flask.
 
 ## Getting started
 Set up Mongo DB [account](https://www.mongodb.com/cloud/atlas/register)
 
 Set up your cluster
 
-Create passwords.py in directory src/database/passwords.py and add your USER, PASSWORD, and CLUSTER variables in the following format 
+Create passwords.py in directory src/database/passwords.py and add your USER, PASSWORD, and CLUSTER variables in the following format
 ```python
 USER = "USER_NAME"
 PASSWORD = "<mongodb-password>"
 CLUSTER = "CLUSTER_NAME"
 ```
-Make sure you have your python virtual environment set up 
+Make sure you have your python virtual environment set up
 
 Start your Virtual Environment
 ```bash
@@ -183,14 +183,12 @@ To test profile isolation and migration with fake MongoDB/Redis:
 python3 -m unittest discover -s tests -v
 ```
 
-### Recent transactions date range
+### Transaction date-range API
 
-The dashboard uses `transactionsByDateRange(profileId: ID!, startDate: Date,
+The API supports `transactionsByDateRange(profileId: ID!, startDate: Date,
 endDate: Date)`. Both dates are inclusive. Either bound can be omitted; omitting
 both returns all transaction history for the selected profile. Reversed ranges
-are rejected. Results are ordered newest first. The frontend defaults to today
-and the preceding 29 calendar days, and sends updated bounds when the user
-changes the date picker. The older last-month query remains available for existing
+are rejected. Results are ordered newest first. The dashboard no longer loads recent transactions; the dedicated Transactions page uses the paginated search API documented below. The older last-month query remains available for existing
 callers.
 
 ## Initializing your Data
@@ -228,7 +226,7 @@ Once you are fully setup you can start your local web server
 ```bash
 python3 app.py
 ```
-This will run your server on the URL [http://127.0.0.1:5000/](http://127.0.0.1:5000/) but since we are using GraphQL, our application is actually using [http://127.0.0.1:5000/graphql](http://127.0.0.1:5000/graphql). We use GraphiQL for our playground. Here we can test our GraphQL APIs and explore the documentation. For example, if we wanted to get all the activities, we can run the following in our GraphiQL playground. 
+This will run your server on the URL [http://127.0.0.1:5002/](http://127.0.0.1:5002/) but since we are using GraphQL, our application is actually using [http://127.0.0.1:5002/graphql](http://127.0.0.1:5002/graphql). We use GraphiQL for our playground. Here we can test our GraphQL APIs and explore the documentation. For example, if we wanted to get all the activities, we can run the following in our GraphiQL playground.
 
 Note that in order for you to be able to run requests successfully, you need to add your current IP address to the network access list on Mongo DB. Simply login to your mongo db account, click network access on the left panel, and click ADD IP ADDRESS.
 
@@ -245,7 +243,7 @@ Note that in order for you to be able to run requests successfully, you need to 
 }
 ```
 
-to produce the response 
+to produce the response
 ```json
 {
   "data": {
@@ -491,7 +489,7 @@ SEC Fee is an account-level expense available only for USD trading accounts. Ent
 
 ### Query performance diagnostics
 
-GraphQL transaction queries batch related MongoDB documents to avoid repeated per-transaction reference reads. This preserves existing profile filters, results, and cache/refresh behavior; no migration is needed. See [the measurement report](docs/transaction-fetching-performance.md) for before/after results and the read-only `scripts/benchmark_transaction_queries.py` command. Persistent analytics and bounded-history APIs are planned separately.
+GraphQL transaction queries batch related MongoDB documents to avoid repeated per-transaction reference reads. This preserves existing profile filters, results, and cache/refresh behavior; no migration is needed. See [the measurement report](docs/transaction-fetching-performance.md) for before/after results and the read-only `scripts/benchmark_transaction_queries.py` command. Recorded analytics are computed on demand by the shared backend ledger; paginated transaction search is documented below. No scheduled analytics engine is needed.
 
 ### Explicit transaction search and fetch metadata
 
@@ -625,3 +623,31 @@ query($profile: ID!, $platform: ID!) {
 Stock scopes use dated buy totals, sale proceeds, stock-linked income/tax and boundary transfers, with current holdings as the ending value. Fees already in trade totals are not subtracted twice, and account-only fees are not attributed to a stock. Splits produce no cash flow. Stock-level spinoffs need an actual spinoff-date market value; cost allocations alone cannot establish that return, so affected stock returns remain null with an explanatory note. Account/portfolio spinoffs are internal movements.
 
 Missing valuations, missing transfer values, insufficient dated cash flows, negative ending values, or no single stable bracketed solution return null (rendered as a dash). The bounded solver scans log(1+rate) from -20 to 20, bisects brackets, verifies the residual and rejects detected multiple roots; it does not claim an answer outside that numerical range. No market-provider requests or database writes occur in this calculator. Results use the complete scoped ledger through today in America/Toronto and the existing cached market valuation.
+
+### Recorded financial analytics
+
+`financialAnalytics(profileId, account, platform, stock)` returns separate CAD/USD
+summaries: statistic values, book-cost distributions, account distributions, book-cost
+and net-deposit history, buy/sell history, income/tax history, and ledger issues. The
+account, platform and stock transaction queries can request analytics in the same
+GraphQL operation. A request-local scope memo reuses the transaction read for both
+fields; account reads retain Redis caching and `X-Cache-Bypass` behavior. Each page
+selects only the summary/history fields it displays. Dashboard queries no longer
+transfer all transactions just to calculate cards.
+
+`schemas/analytics_ledger.py` is the shared Decimal ledger for recorded analytics and
+market valuation. Average-cost purchase basis stays separate for each platform before
+aggregation. Sales remove proportional basis; splits change quantity; spinoffs move
+allocated basis; asset transfers carry basis without creating profit or moving cash.
+Trading fees already included in trade totals are not deducted twice. GIC principal
+and interest remain separate. Realized gains remain null when a disposal has missing
+shares or an amount-only fund has no recorded disposal basis. Market valuation still
+uses holdings through today; recorded analytics preserve the existing all-recorded
+transaction scope, including future-dated entries.
+
+`contributionAnalytics(profileId)` returns lifetime contributions, summed saved limits,
+percentage used and cumulative history per account type. It matches the existing
+contribution overview across platforms and currencies without FX conversion. NRSA
+returns no limit or percentage. These are computed summaries, not new collections or
+a scheduled analytics engine. Edits are reflected on the next query; the frontend
+invalidates its analytics entries and refreshes active queries after mutations.
