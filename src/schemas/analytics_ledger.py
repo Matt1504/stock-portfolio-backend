@@ -68,4 +68,3 @@ def ledger(records, selected_stock=None):
             issues.append('{} ({}): the recorded share balance is −{}.'.format(p['stock'].ticker, getattr(p['platform'], 'name', ''), -p['shares']))
     if incomplete: issues.append('Some sales have missing holdings or no recorded disposal cost; realized gain/loss is unavailable.')
     return dict(positions=[p for p in selected if p['shares'] >= 0 and (p['shares'] > 0 or p['cost'] > 0)], history=history, gain=None if incomplete else gain, cash=cash, issues=issues)
-
